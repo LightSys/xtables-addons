@@ -39,7 +39,6 @@ MODULE_DESCRIPTION("Detecting packet drops in MPEG2 Transport Streams (TS)");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(XT_MODULE_VERSION);
 MODULE_ALIAS("ipt_mp2t");
-MODULE_ALIAS("ipt_mpeg2ts");
 
 /* Proc related */
 static struct proc_dir_entry *mp2t_procdir;
