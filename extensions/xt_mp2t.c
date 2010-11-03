@@ -637,20 +637,6 @@ mp2t_stream_alloc_init(struct xt_rule_mp2t_conn_htable *ht,
 	return entry;
 }
 
-/*
- * The xt_mp2t_mt_check(), return type changed, which is quite
- *  confusing as the return logic gets turned around.
- *
- *  TODO: Think change happend in 2.6.35, need to check the exact
- *  kernel version this changed in!
- */
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 34)
-enum RETURNVALS { error = 0 /*false*/, success = 1 /*true*/, };
-#endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
-enum RETURNVALS { error = -EINVAL, success = 0, };
-#endif
-
 static int
 xt_mp2t_mt_check(const struct xt_mtchk_param *par)
 {
@@ -664,13 +650,13 @@ xt_mp2t_mt_check(const struct xt_mtchk_param *par)
 	/* Debugging, this should not be possible */
 	if (!info) {
 		msg_err(DRV, "ERROR info is NULL");
-		return error;
+		return -EINVAL;
 	}
 
 	/* Debugging, this should not be possible */
 	if (IS_ERR_VALUE((unsigned long)(info->hinfo))) {
 		msg_err(DRV, "ERROR info->hinfo is an invalid pointer!!!");
-		return error;
+		return -EINVAL;
 	}
 
 	/* TODO/FIXME: Add a check to NOT allow proc files with same
@@ -685,15 +671,15 @@ xt_mp2t_mt_check(const struct xt_mtchk_param *par)
 		atomic_inc(&info->hinfo->use);
 		msg_info(DEBUG, "ReUsing info->hinfo ptr:[%p] htable id:%d",
 			 info->hinfo, info->hinfo->id);
-		return success;
+		return 0;
 	}
 
 	if (mp2t_htable_create(info) == false) {
 		msg_err(DRV, "Error creating hash table");
-		return error;
+		return -ENOMEM;
 	}
 
-	return success;
+	return 0;
 }
 
 static void
