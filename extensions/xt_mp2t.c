@@ -34,6 +34,14 @@
 #include "xt_mp2t.h"
 #include "compat_xtables.h"
 
+#define XT_MODULE_NAME		"xt_mp2t"
+#define XT_MODULE_VERSION	"0.2.1-devel"
+#define XT_MODULE_RELDATE	"Sep 15, 2010"
+#define PFX			XT_MODULE_NAME ": "
+
+static char version[] =
+	XT_MODULE_NAME ".c:v" XT_MODULE_VERSION " (" XT_MODULE_RELDATE ")";
+
 MODULE_AUTHOR("Jesper Dangaard Brouer <jdb@comx.dk>");
 MODULE_DESCRIPTION("Detecting packet drops in MPEG2 Transport Streams (TS)");
 MODULE_LICENSE("GPL");

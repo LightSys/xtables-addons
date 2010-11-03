@@ -12,14 +12,6 @@
 #ifndef _LINUX_NETFILTER_XT_MP2T_MATCH_H
 #define _LINUX_NETFILTER_XT_MP2T_MATCH_H 1
 
-#define XT_MODULE_NAME		"xt_mp2t"
-#define XT_MODULE_VERSION	"0.2.1-devel"
-#define XT_MODULE_RELDATE	"Sep 15, 2010"
-#define PFX			XT_MODULE_NAME ": "
-
-static char version[] =
-	XT_MODULE_NAME ".c:v" XT_MODULE_VERSION " (" XT_MODULE_RELDATE ")";
-
 enum {
 	XT_MP2T_DETECT_DROP = 1 << 0,
 	XT_MP2T_MAX_STREAMS = 1 << 1,
