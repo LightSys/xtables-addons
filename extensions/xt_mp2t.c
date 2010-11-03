@@ -34,13 +34,12 @@
 #include "xt_mp2t.h"
 #include "compat_xtables.h"
 
-#define XT_MODULE_NAME		"xt_mp2t"
 #define XT_MODULE_VERSION	"0.2.1-devel"
 #define XT_MODULE_RELDATE	"Sep 15, 2010"
-#define PFX			XT_MODULE_NAME ": "
+#define PFX			KBUILD_MODNAME ": "
 
 static char version[] =
-	XT_MODULE_NAME ".c:v" XT_MODULE_VERSION " (" XT_MODULE_RELDATE ")";
+	KBUILD_MODNAME ".c:v" XT_MODULE_VERSION " (" XT_MODULE_RELDATE ")";
 
 MODULE_AUTHOR("Jesper Dangaard Brouer <jdb@comx.dk>");
 MODULE_DESCRIPTION("Detecting packet drops in MPEG2 Transport Streams (TS)");
@@ -1280,7 +1279,7 @@ static int mp2t_seq_show(struct seq_file *s, void *v)
 
 		/* version info */
 		seq_printf(s, "# info:version module:%s version:%s\n",
-			   XT_MODULE_NAME, XT_MODULE_VERSION);
+			   KBUILD_MODNAME, XT_MODULE_VERSION);
 
 		/* time info */
 		seq_printf(s, "# info:time created:%ld.%09lu"
@@ -1376,7 +1375,7 @@ static int __init mp2t_mt_init(void)
 
 #ifdef CONFIG_PROC_FS
 	/* Create proc directory shared by all rules */
-	mp2t_procdir = proc_mkdir(XT_MODULE_NAME, init_net.proc_net);
+	mp2t_procdir = proc_mkdir(KBUILD_MODNAME, init_net.proc_net);
 	if (!mp2t_procdir) {
 		msg_err(DRV, "unable to create proc dir entry");
 		/* In case of error unregister the mp2t matches */
@@ -1392,7 +1391,7 @@ static void __exit mp2t_mt_exit(void)
 {
 	msg_info(DRV, "Unloading: %s", version);
 
-	remove_proc_entry(XT_MODULE_NAME, init_net.proc_net);
+	remove_proc_entry(KBUILD_MODNAME, init_net.proc_net);
 
 	xt_unregister_match(&mp2t_mt_reg);
 
