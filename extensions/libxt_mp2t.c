@@ -43,11 +43,9 @@ static void mp2t_mt_help(void)
 {
 	printf(
 "mp2t (MPEG2 Transport Stream) match options:\n"
-"VERSION %s\n"
 "   [--name <name>]        Name for proc file /proc/net/xt_mp2t/rule_NAME\n"
 "   [--drop-detect]        Match lost TS frames (occured before this packet)\n"
-"   [--max-streams <num>]  Track 'max' number of streams (per rule)\n",
-		version
+"   [--max-streams <num>]  Track 'max' number of streams (per rule)\n"
 		);
 }
 
