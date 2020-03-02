@@ -54,123 +54,33 @@
 #include <net/route.h>
 #include <net/tcp.h>
 #include "compat_xtables.h"
+#include "xt_TARHASH.h"
 #include "xt_TARPIT.h"
 #if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
 #	define WITH_IPV6 1
 #endif
 
-static bool xttarpit_tarpit(struct tcphdr *tcph, const struct tcphdr *oth)
+static void xttarhash_tarhash(struct tcphdr *tcph, const struct tcphdr *oth)
 {
-	/* No replies for RST, FIN or !SYN,!ACK */
-	if (oth->rst || oth->fin || (!oth->syn && !oth->ack))
-		return false;
-	tcph->seq = oth->ack ? oth->ack_seq : 0;
 
-	/* Our SYN-ACKs must have a >0 window */
-	tcph->window = (oth->syn && !oth->ack) ? htons(5) : 0;
-	if (oth->syn && oth->ack) {
-		tcph->rst     = true;
-		tcph->ack_seq = false;
-	} else {
-		tcph->syn     = oth->syn;
-		tcph->ack     = true;
-		tcph->ack_seq = htonl(ntohl(oth->seq) + oth->syn);
-	}
-#if 0
-	/* Rate-limit replies to !SYN,ACKs */
-	if (!oth->syn && oth->ack)
-		if (!xrlim_allow(&ort->dst, HZ))
-			return false;
-#endif
-
-	return true;
 }
 
-static bool xttarpit_honeypot(struct tcphdr *tcph, const struct tcphdr *oth,
-    uint16_t payload)
-{
-	/* Do not answer any resets regardless of combination */
-	if (oth->rst || oth->seq == 0xDEADBEEF)
-		return false;
-	/* Send a reset to scanners. They like that. */
-	if (oth->syn && oth->ack) {
-		tcph->window  = 0;
-		tcph->ack     = false;
-		tcph->psh     = true;
-		tcph->ack_seq = 0xdeadbeef; /* see if they ack it */
-		tcph->seq     = oth->ack_seq;
-		tcph->rst     = true;
-	}
-
-	/* SYN > SYN-ACK */
-	if (oth->syn && !oth->ack) {
-		tcph->syn     = true;
-		tcph->ack     = true;
-		tcph->window  = oth->window &
-			((prandom_u32() & 0x1f) - 0xf);
-		tcph->seq     = htonl(prandom_u32() & ~oth->seq);
-		tcph->ack_seq = htonl(ntohl(oth->seq) + oth->syn);
-	}
-
-	/* ACK > ACK */
-	if (oth->ack && (!(oth->fin || oth->syn))) {
-		tcph->syn     = false;
-		tcph->ack     = true;
-		tcph->window  = oth->window &
-			((prandom_u32() & 0x1f) - 0xf);
-		tcph->ack_seq = payload > 100 ?
-			htonl(ntohl(oth->seq) + payload) :
-			oth->seq;
-		tcph->seq     = oth->ack_seq;
-	}
-
-	/*
-	 * FIN > RST.
-	 * We cannot terminate gracefully so just be abrupt.
-	 */
-	if (oth->fin) {
-		tcph->window  = 0;
-		tcph->seq     = oth->ack_seq;
-		tcph->ack_seq = oth->ack_seq;
-		tcph->fin     = false;
-		tcph->ack     = false;
-		tcph->rst     = true;
-	}
-
-	return true;
-}
-
-static void xttarpit_reset(struct tcphdr *tcph, const struct tcphdr *oth)
-{
-	tcph->window  = 0;
-	tcph->ack     = false;
-	tcph->syn     = false;
-	tcph->rst     = true;
-	tcph->seq     = oth->ack_seq;
-	tcph->ack_seq = oth->seq;
-}
-
-static bool tarpit_generic(struct tcphdr *tcph, const struct tcphdr *oth,
+static bool tarhash_generic(struct tcphdr *tcph, const struct tcphdr *oth,
     uint16_t payload, unsigned int mode)
 {
+	// JEB: I deleted the rest of the options for now.  We may want to bring them back
+	// at some point, but for now I removed them
 	switch(mode) {
-	case XTTARPIT_TARPIT:
-		if (!xttarpit_tarpit(tcph, oth))
+	case XTTARHASH_TARHASH:
+		if (!xttarhash_tarhash(tcph, oth))
 			return false;
-		break;
-	case XTTARPIT_HONEYPOT:
-		if (!xttarpit_honeypot(tcph, oth, payload))
-			return false;
-		break;
-	case XTTARPIT_RESET:
-		xttarpit_reset(tcph, oth);
 		break;
 	}
 
 	return true;
 }
 
-static void tarpit_tcp4(struct net *net, struct sk_buff *oldskb,
+static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
     unsigned int hook, unsigned int mode)
 {
 	struct tcphdr _otcph, *tcph;
@@ -236,7 +146,7 @@ static void tarpit_tcp4(struct net *net, struct sk_buff *oldskb,
 	/* Reset flags */
 	((u_int8_t *)tcph)[13] = 0;
 
-	if (!tarpit_generic(tcph, oth, payload, mode))
+	if (!tarhash_generic(tcph, oth, payload, mode))
 		goto free_nskb;
 
 	/* Adjust TCP checksum */
@@ -247,6 +157,7 @@ static void tarpit_tcp4(struct net *net, struct sk_buff *oldskb,
 
 	/* Set DF, id = 0 */
 	niph->frag_off = htons(IP_DF);
+	// JEB: we need to verify which of these options best fits our TARHASH usecase
 	if (mode == XTTARPIT_TARPIT || mode == XTTARPIT_RESET)
 		niph->id = 0;
 	else if (mode == XTTARPIT_HONEYPOT)
@@ -296,7 +207,7 @@ static void tarpit_tcp4(struct net *net, struct sk_buff *oldskb,
 }
 
 #ifdef WITH_IPV6
-static void tarpit_tcp6(struct net *net, struct sk_buff *oldskb,
+static void tarhash_tcp6(struct net *net, struct sk_buff *oldskb,
     unsigned int hook, unsigned int mode)
 {
 	struct sk_buff *nskb;
@@ -387,7 +298,7 @@ static void tarpit_tcp6(struct net *net, struct sk_buff *oldskb,
 	((uint8_t *)tcph)[13] = 0;
 
 	payload = nskb->len - sizeof(struct ipv6hdr) - sizeof(struct tcphdr);
-	if (!tarpit_generic(&oth, tcph, payload, mode))
+	if (!tarhash_generic(&oth, tcph, payload, mode))
 		goto free_nskb;
 
 	ip6h->payload_len = htons(sizeof(struct tcphdr));
@@ -415,11 +326,11 @@ static void tarpit_tcp6(struct net *net, struct sk_buff *oldskb,
 #endif
 
 static unsigned int
-tarpit_tg4(struct sk_buff *skb, const struct xt_action_param *par)
+tarhash_tg4(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	const struct rtable *rt = skb_rtable(skb);
-	const struct xt_tarpit_tginfo *info = par->targinfo;
+	const struct xt_tarhash_tginfo *info = par->targinfo;
 
 	/* Do we have an input route cache entry? (Not in PREROUTING.) */
 	if (rt == NULL)
@@ -444,17 +355,17 @@ tarpit_tg4(struct sk_buff *skb, const struct xt_action_param *par)
 	/* We are not interested in fragments */
 	if (iph->frag_off & htons(IP_OFFSET))
 		return NF_DROP;
-	tarpit_tcp4(par_net(par), skb, par->state->hook, info->variant);
+	tarhash_tcp4(par_net(par), skb, par->state->hook, info->variant);
 	return NF_DROP;
 }
 
 #ifdef WITH_IPV6
 static unsigned int
-tarpit_tg6(struct sk_buff *skb, const struct xt_action_param *par)
+tarhash_tg6(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct ipv6hdr *iph = ipv6_hdr(skb);
 	const struct rt6_info *rt = (struct rt6_info *)skb_dst(skb);
-	const struct xt_tarpit_tginfo *info = par->targinfo;
+	const struct xt_tarhash_tginfo *info = par->targinfo;
 	uint8_t proto;
 	__be16 frag_off;
 
@@ -485,50 +396,50 @@ tarpit_tg6(struct sk_buff *skb, const struct xt_action_param *par)
 		pr_debug("addr is not unicast.\n");
 		return NF_DROP;
 	}
-	tarpit_tcp6(par_net(par), skb, par->state->hook, info->variant);
+	tarhash_tcp6(par_net(par), skb, par->state->hook, info->variant);
 	return NF_DROP;
 }
 #endif
 
-static struct xt_target tarpit_tg_reg[] __read_mostly = {
+static struct xt_target tarhash_tg_reg[] __read_mostly = {
 	{
-		.name       = "TARPIT",
+		.name       = "TARHASH",
 		.revision   = 0,
 		.family     = NFPROTO_IPV4,
 		.hooks      = (1 << NF_INET_LOCAL_IN) | (1 << NF_INET_FORWARD),
 		.proto      = IPPROTO_TCP,
-		.target     = tarpit_tg4,
-		.targetsize = sizeof(struct xt_tarpit_tginfo),
+		.target     = tarhash_tg4,
+		.targetsize = sizeof(struct xt_tarhash_tginfo),
 		.me         = THIS_MODULE,
 	},
 #ifdef WITH_IPV6
 	{
-		.name       = "TARPIT",
+		.name       = "TARHASH",
 		.revision   = 0,
 		.family     = NFPROTO_IPV6,
 		.hooks      = (1 << NF_INET_LOCAL_IN) | (1 << NF_INET_FORWARD),
 		.proto      = IPPROTO_TCP,
-		.target     = tarpit_tg6,
-		.targetsize = sizeof(struct xt_tarpit_tginfo),
+		.target     = tarhash_tg6,
+		.targetsize = sizeof(struct xt_tarhash_tginfo),
 		.me         = THIS_MODULE,
 	},
 #endif
 };
 
-static int __init tarpit_tg_init(void)
+static int __init tarhash_tg_init(void)
 {
-	return xt_register_targets(tarpit_tg_reg, ARRAY_SIZE(tarpit_tg_reg));
+	return xt_register_targets(tarhash_tg_reg, ARRAY_SIZE(tarhash_tg_reg));
 }
 
-static void __exit tarpit_tg_exit(void)
+static void __exit tarhash_tg_exit(void)
 {
-	xt_unregister_targets(tarpit_tg_reg, ARRAY_SIZE(tarpit_tg_reg));
+	xt_unregister_targets(tarhash_tg_reg, ARRAY_SIZE(tarhash_tg_reg));
 }
 
-module_init(tarpit_tg_init);
-module_exit(tarpit_tg_exit);
-MODULE_DESCRIPTION("Xtables: \"TARPIT\", capture and hold TCP connections");
+module_init(tarhash_tg_init);
+module_exit(tarhash_tg_exit);
+MODULE_DESCRIPTION("Xtables: \"TARHASH\", capture and hold TCP connections");
 MODULE_AUTHOR("Jan Engelhardt ");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("ipt_TARPIT");
-MODULE_ALIAS("ip6t_TARPIT");
+MODULE_ALIAS("ipt_TARHASH");
+MODULE_ALIAS("ip6t_TARHASH");
