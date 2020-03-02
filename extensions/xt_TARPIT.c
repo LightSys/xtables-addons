@@ -61,12 +61,14 @@
 
 static void xttarhash_tarhash(struct tcphdr *tcph, const struct tcphdr *oth)
 {
-	
+
 }
 
 static bool tarhash_generic(struct tcphdr *tcph, const struct tcphdr *oth,
     uint16_t payload, unsigned int mode)
 {
+	// JEB: I deleted the rest of the options for now.  We may want to bring them back
+	// at some point, but for now I removed them
 	switch(mode) {
 	case XTTARHASH_TARHASH:
 		if (!xttarhash_tarhash(tcph, oth))
@@ -154,6 +156,7 @@ static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
 
 	/* Set DF, id = 0 */
 	niph->frag_off = htons(IP_DF);
+	// JEB: we need to verify which of these options best fits our TARHASH usecase
 	if (mode == XTTARPIT_TARPIT || mode == XTTARPIT_RESET)
 		niph->id = 0;
 	else if (mode == XTTARPIT_HONEYPOT)
