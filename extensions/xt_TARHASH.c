@@ -59,7 +59,7 @@
 #	define WITH_IPV6 1
 #endif
 
-static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_tginfo info)
+static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_tginfo *info)
 {
 	// Make hash of (masked) source, dest, port, key
 	// Modulus by ratio
@@ -189,7 +189,7 @@ static bool tarhash_generic(struct tcphdr *tcph, const struct tcphdr *oth,
 }
 
 static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
-    unsigned int hook, const struct iphdr *iph, const struct xt_tarhash_tginfo info)
+    unsigned int hook, const struct iphdr *iph, const struct xt_tarhash_tginfo *info)
 {
 	struct tcphdr _otcph, *tcph;
 	const struct tcphdr *oth;
