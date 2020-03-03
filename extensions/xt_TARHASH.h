@@ -8,7 +8,10 @@ enum xt_tarhash_target_variant {
 };
 
 struct xt_tarhash_tginfo {
-	uint8_t variant;
+	uint8_t  variant;
+	uint8_t  src_prefix;
+	uint32_t ratio;
+	char[32] key;
 };
 
-#endif /* _LINUX_NETFILTER_XT_TARHASHH */
+#endif /* _LINUX_NETFILTER_XT_TARHASH_H */
