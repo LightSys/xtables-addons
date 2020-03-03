@@ -59,6 +59,15 @@
 #	define WITH_IPV6 1
 #endif
 
+static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct xt_tarhash_tginfo info)
+{
+	// Make hash of (masked) source, dest, port, key
+	// Modulus by ratio
+	// If mod is 0, return true
+	// If mod is non-zero return false
+	return true;
+}
+
 static bool xttarhash_tarpit(struct tcphdr *tcph, const struct tcphdr *oth)
 {
 	/* No replies for RST, FIN or !SYN,!ACK */
@@ -171,7 +180,7 @@ static bool tarhash_generic(struct tcphdr *tcph, const struct tcphdr *oth,
 }
 
 static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
-    unsigned int hook, unsigned int mode)
+    unsigned int hook,  const struct xt_tarhash_tginfo info)
 {
 	struct tcphdr _otcph, *tcph;
 	const struct tcphdr *oth;
@@ -180,6 +189,10 @@ static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
 	const struct iphdr *oldhdr;
 	struct iphdr *niph;
 	uint16_t tmp, payload;
+	
+	unsigned int mode;
+
+	mode = info->variant;
 
 	/* A truncated TCP header is not going to be useful */
 	if (oldskb->len < ip_hdrlen(oldskb) + sizeof(struct tcphdr))
@@ -189,6 +202,10 @@ static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
 	                         sizeof(_otcph), &_otcph);
 	if (oth == NULL)
 		return;
+
+	/* Check using hash function whether tarpit response should be sent */
+	if (!xttarhash_hashdecided(oth, info)) 
+		goto free_nskb;
 
 	/* Check checksum. */
 	if (nf_ip_checksum(oldskb, hook, ip_hdrlen(oldskb), IPPROTO_TCP))
@@ -421,6 +438,8 @@ tarhash_tg4(struct sk_buff *skb, const struct xt_action_param *par)
 	const struct rtable *rt = skb_rtable(skb);
 	const struct xt_tarhash_tginfo *info = par->targinfo;
 
+	xttarhash_hashdecided(const struct tcphdr *oth, const struct xt_tarhash_tginfo info)
+
 	/* Do we have an input route cache entry? (Not in PREROUTING.) */
 	if (rt == NULL)
 		return NF_DROP;
@@ -444,7 +463,7 @@ tarhash_tg4(struct sk_buff *skb, const struct xt_action_param *par)
 	/* We are not interested in fragments */
 	if (iph->frag_off & htons(IP_OFFSET))
 		return NF_DROP;
-	tarhash_tcp4(par_net(par), skb, par->state->hook, info->variant);
+	tarhash_tcp4(par_net(par), skb, par->state->hook, info);
 	return NF_DROP;
 }
 
