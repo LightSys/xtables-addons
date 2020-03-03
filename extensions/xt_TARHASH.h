@@ -1,12 +1,14 @@
-#ifndef _LINUX_NETFILTER_XT_TARPIT_H
-#define _LINUX_NETFILTER_XT_TARPIT_H 1
+#ifndef _LINUX_NETFILTER_XT_TARHASH_H
+#define _LINUX_NETFILTER_XT_TARHASH_H 1
 
 enum xt_tarhash_target_variant {
-	XTTARHASH_TARHASH,
+	XTTARHASH_TARPIT,
+	XTTARHASH_HONEYPOT,
+	XTTARHASH_RESET,
 };
 
 struct xt_tarhash_tginfo {
 	uint8_t variant;
 };
 
-#endif /* _LINUX_NETFILTER_XT_TARHASH_H */
+#endif /* _LINUX_NETFILTER_XT_TARHASHH */

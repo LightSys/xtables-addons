@@ -55,25 +55,115 @@
 #include <net/tcp.h>
 #include "compat_xtables.h"
 #include "xt_TARHASH.h"
-#include "xt_TARPIT.h"
 #if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
 #	define WITH_IPV6 1
 #endif
 
-static void xttarhash_tarhash(struct tcphdr *tcph, const struct tcphdr *oth)
+static bool xttarhash_tarpit(struct tcphdr *tcph, const struct tcphdr *oth)
 {
+	/* No replies for RST, FIN or !SYN,!ACK */
+	if (oth->rst || oth->fin || (!oth->syn && !oth->ack))
+		return false;
+	tcph->seq = oth->ack ? oth->ack_seq : 0;
 
+	/* Our SYN-ACKs must have a >0 window */
+	tcph->window = (oth->syn && !oth->ack) ? htons(5) : 0;
+	if (oth->syn && oth->ack) {
+		tcph->rst     = true;
+		tcph->ack_seq = false;
+	} else {
+		tcph->syn     = oth->syn;
+		tcph->ack     = true;
+		tcph->ack_seq = htonl(ntohl(oth->seq) + oth->syn);
+	}
+#if 0
+	/* Rate-limit replies to !SYN,ACKs */
+	if (!oth->syn && oth->ack)
+		if (!xrlim_allow(&ort->dst, HZ))
+			return false;
+#endif
+
+	return true;
+}
+
+static bool xttarhash_honeypot(struct tcphdr *tcph, const struct tcphdr *oth,
+    uint16_t payload)
+{
+	/* Do not answer any resets regardless of combination */
+	if (oth->rst || oth->seq == 0xDEADBEEF)
+		return false;
+	/* Send a reset to scanners. They like that. */
+	if (oth->syn && oth->ack) {
+		tcph->window  = 0;
+		tcph->ack     = false;
+		tcph->psh     = true;
+		tcph->ack_seq = 0xdeadbeef; /* see if they ack it */
+		tcph->seq     = oth->ack_seq;
+		tcph->rst     = true;
+	}
+
+	/* SYN > SYN-ACK */
+	if (oth->syn && !oth->ack) {
+		tcph->syn     = true;
+		tcph->ack     = true;
+		tcph->window  = oth->window &
+			((prandom_u32() & 0x1f) - 0xf);
+		tcph->seq     = htonl(prandom_u32() & ~oth->seq);
+		tcph->ack_seq = htonl(ntohl(oth->seq) + oth->syn);
+	}
+
+	/* ACK > ACK */
+	if (oth->ack && (!(oth->fin || oth->syn))) {
+		tcph->syn     = false;
+		tcph->ack     = true;
+		tcph->window  = oth->window &
+			((prandom_u32() & 0x1f) - 0xf);
+		tcph->ack_seq = payload > 100 ?
+			htonl(ntohl(oth->seq) + payload) :
+			oth->seq;
+		tcph->seq     = oth->ack_seq;
+	}
+
+	/*
+	 * FIN > RST.
+	 * We cannot terminate gracefully so just be abrupt.
+	 */
+	if (oth->fin) {
+		tcph->window  = 0;
+		tcph->seq     = oth->ack_seq;
+		tcph->ack_seq = oth->ack_seq;
+		tcph->fin     = false;
+		tcph->ack     = false;
+		tcph->rst     = true;
+	}
+
+	return true;
+}
+
+static void xttarhash_reset(struct tcphdr *tcph, const struct tcphdr *oth)
+{
+	tcph->window  = 0;
+	tcph->ack     = false;
+	tcph->syn     = false;
+	tcph->rst     = true;
+	tcph->seq     = oth->ack_seq;
+	tcph->ack_seq = oth->seq;
 }
 
 static bool tarhash_generic(struct tcphdr *tcph, const struct tcphdr *oth,
     uint16_t payload, unsigned int mode)
 {
-	// JEB: I deleted the rest of the options for now.  We may want to bring them back
-	// at some point, but for now I removed them
 	switch(mode) {
-	case XTTARHASH_TARHASH:
-		if (!xttarhash_tarhash(tcph, oth))
+	case XTTARHASH_TARPIT:
+		if (!xttarhash_tarpit(tcph, oth))
 			return false;
+		break;
+	case XTTARHASH_HONEYPOT:
+		if (!xttarhash_honeypot(tcph, oth, payload))
+			return false;
+		break;
+	case XTTARHASH_RESET:
+		xttarhash_reset(tcph, oth);
 		break;
 	}
 
@@ -157,10 +247,9 @@ static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
 
 	/* Set DF, id = 0 */
 	niph->frag_off = htons(IP_DF);
-	// JEB: we need to verify which of these options best fits our TARHASH usecase
-	if (mode == XTTARPIT_TARPIT || mode == XTTARPIT_RESET)
+	if (mode == XTTARHASH_TARPIT || mode == XTTARHASH_RESET)
 		niph->id = 0;
-	else if (mode == XTTARPIT_HONEYPOT)
+	else if (mode == XTTARHASH_HONEYPOT)
 		niph->id = ~oldhdr->id + 1;
 
 #ifdef CONFIG_BRIDGE_NETFILTER
@@ -184,7 +273,7 @@ static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
 	nskb->ip_summed = CHECKSUM_NONE;
 
 	/* Adjust IP TTL */
-	if (mode == XTTARPIT_HONEYPOT)
+	if (mode == XTTARHASH_HONEYPOT)
 		niph->ttl = 128;
 	else
 		niph->ttl = ip4_dst_hoplimit(skb_dst(nskb));
@@ -279,7 +368,7 @@ static void tarhash_tcp6(struct net *net, struct sk_buff *oldskb,
 	ip6h->daddr = oip6h->saddr;
 
 	/* Adjust IP TTL */
-	if (mode == XTTARPIT_HONEYPOT) {
+	if (mode == XTTARHASH_HONEYPOT) {
 		ip6h->hop_limit = 128;
 	} else {
 		ip6h->hop_limit = ip6_dst_hoplimit(skb_dst(nskb));
