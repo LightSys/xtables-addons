@@ -67,13 +67,13 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 	// If mod is non-zero return false
 
 	/* For checking whether we can access all needed properties */
-	printk(oth->dest);
-	printk(iph->saddr);
-	printk(iph->daddr);
-	printk(info->variant);
-	printk(info->src_prefix);
-	printk(info->ratio);
-	printk(info->key);
+	printk("dest: %u\n", oth->dest);
+	printk("saddr: %u\n", iph->saddr);
+	printk("daddr: %u\n", iph->daddr);
+	printk("variant: %u\n", info->variant);
+	printk("src-prefix: %u\n", info->src_prefix);
+	printk("ratio: %u\n", info->ratio);
+	printk("key: %s\n", info->key);
 	return true;
 }
 
