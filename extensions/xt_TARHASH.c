@@ -59,12 +59,21 @@
 #	define WITH_IPV6 1
 #endif
 
-static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct xt_tarhash_tginfo info)
+static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_tginfo info)
 {
 	// Make hash of (masked) source, dest, port, key
 	// Modulus by ratio
 	// If mod is 0, return true
 	// If mod is non-zero return false
+
+	/* For checking whether we can access all needed properties */
+	printk(oth->dest);
+	printk(iph->saddr);
+	printk(iph->daddr);
+	printk(info->variant);
+	printk(info->src_prefix);
+	printk(info->ratio);
+	printk(info->key);
 	return true;
 }
 
@@ -180,7 +189,7 @@ static bool tarhash_generic(struct tcphdr *tcph, const struct tcphdr *oth,
 }
 
 static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
-    unsigned int hook,  const struct xt_tarhash_tginfo info)
+    unsigned int hook, const struct iphdr *iph, const struct xt_tarhash_tginfo info)
 {
 	struct tcphdr _otcph, *tcph;
 	const struct tcphdr *oth;
@@ -204,7 +213,7 @@ static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
 		return;
 
 	/* Check using hash function whether tarpit response should be sent */
-	if (!xttarhash_hashdecided(oth, info)) 
+	if (!xttarhash_hashdecided(oth, iph, info)) 
 		goto free_nskb;
 
 	/* Check checksum. */
@@ -438,8 +447,6 @@ tarhash_tg4(struct sk_buff *skb, const struct xt_action_param *par)
 	const struct rtable *rt = skb_rtable(skb);
 	const struct xt_tarhash_tginfo *info = par->targinfo;
 
-	xttarhash_hashdecided(const struct tcphdr *oth, const struct xt_tarhash_tginfo info)
-
 	/* Do we have an input route cache entry? (Not in PREROUTING.) */
 	if (rt == NULL)
 		return NF_DROP;
@@ -463,7 +470,7 @@ tarhash_tg4(struct sk_buff *skb, const struct xt_action_param *par)
 	/* We are not interested in fragments */
 	if (iph->frag_off & htons(IP_OFFSET))
 		return NF_DROP;
-	tarhash_tcp4(par_net(par), skb, par->state->hook, info);
+	tarhash_tcp4(par_net(par), skb, par->state->hook, iph, info);
 	return NF_DROP;
 }
 
