@@ -9,7 +9,10 @@ enum xt_tarhash_target_variant {
 
 struct xt_tarhash_tginfo {
 	uint8_t  variant;
-	uint8_t  src_prefix;
+	uint8_t  src_prefix4;
+	uint8_t  src_prefix8;
+	uint32_t mask4;
+	uint32_t mask6[4];
 	uint32_t ratio;
 	char key[32];
 };
