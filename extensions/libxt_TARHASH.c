@@ -19,22 +19,23 @@
 #include "compat_user.h"
 
 enum {
-	F_TARPIT     = 1 << 0,
-	F_HONEYPOT   = 1 << 1,
-	F_RESET      = 1 << 2,
-	F_KEY        = 1 << 3,
-	F_RATIO      = 1 << 4,
-	F_SRC_PREFIX = 1 << 5,
+	F_TARPIT      = 1 << 0,
+	F_HONEYPOT    = 1 << 1,
+	F_RESET       = 1 << 2,
+	F_KEY         = 1 << 3,
+	F_RATIO       = 1 << 4,
+	F_SRC_PREFIX4 = 1 << 5,
+	F_SRC_PREFIX6 = 1 << 6,
 };
 
 static const struct option tarhash_tg_opts[] = {
-	{.name = "tarpit",     .has_arg = false, .val = 't'},
-	{.name = "honeypot",   .has_arg = false, .val = 'h'},
-	{.name = "reset",      .has_arg = false, .val = 'r'},
-	{.name = "key",        .has_arg = true,  .val = 'k'},
-	{.name = "ratio",      .has_arg = true,  .val = 'o'},
-	// TODO perhaps use a separate parameter for IPv4 and IPv6 addresses.
-	{.name = "src-prefix", .has_arg = true,  .val = 's'},
+	{.name = "tarpit",      .has_arg = false, .val = 't' },
+	{.name = "honeypot",    .has_arg = false, .val = 'h' },
+	{.name = "reset",       .has_arg = false, .val = 'r' },
+	{.name = "key",         .has_arg = true,  .val = 'k' },
+	{.name = "ratio",       .has_arg = true,  .val = 'o' },
+	{.name = "src-prefix4", .has_arg = true,  .val = 's4'},
+	{.name = "src-prefix6", .has_arg = true,  .val = 's6'},
 	{NULL},
 };
 
@@ -47,7 +48,8 @@ static void tarhash_tg_help(void)
 		"  --reset       Enable inline resets\n"
 		"  --key         Seed/salt value for the hashing function\n"
 		"  --ratio       Inverse of the likelihood that a port is answered\n"
-		"  --src-prefix  Number of bits in the source IP considered in the hash function\n");
+		"  --src-prefix4  Number of bits in the source IPv4 considered in the hash function\n"
+		"  --src-prefix6  Number of bits in the source IPv6 considered in the hash function\n");
 }
 
 static bool parse_unsigned_long(char* str, unsigned long* out) {
@@ -108,16 +110,29 @@ static int tarhash_tg_parse(int c, char **argv, int invert, unsigned int *flags,
 		}
 		info->ratio = (uint32_t) parsed_ratio;
 		return true;
-	case 's':
-		xtables_param_act(XTF_ONLY_ONCE, "TARHASH", "--src-prefix", *flags & F_SRC_PREFIX);
-		xtables_param_act(XTF_NO_INVERT, "TARHASH", "--src-prefix", invert);
-		*flags |= F_SRC_PREFIX;
-		unsigned long parsed_src_prefix;
-		if (!parse_unsigned_long(optarg, &parsed_src_prefix) || parsed_src_prefix > 32) {
-			xtables_param_act(XTF_BAD_VALUE, "TARHASH", "--src-prefix", optarg);
+	case 's4':
+		xtables_param_act(XTF_ONLY_ONCE, "TARHASH", "--src-prefix4", *flags & F_SRC_PREFIX4);
+		xtables_param_act(XTF_NO_INVERT, "TARHASH", "--src-prefix4", invert);
+		*flags |= F_SRC_PREFIX4;
+		unsigned long parsed_src_prefix4;
+		if (!parse_unsigned_long(optarg, &parsed_src_prefix4) || parsed_src_prefix4 > 32) {
+			xtables_param_act(XTF_BAD_VALUE, "TARHASH", "--src-prefix4", optarg);
 			return false;
 		}
-		info->src_prefix = (uint8_t) parsed_src_prefix;
+		info->src_prefix4 = (uint8_t) parsed_src_prefix4;
+
+		return true;
+	case 's6':
+		xtables_param_act(XTF_ONLY_ONCE, "TARHASH", "--src-prefix6", *flags & F_SRC_PREFIX6);
+		xtables_param_act(XTF_NO_INVERT, "TARHASH", "--src-prefix6", invert);
+		*flags |= F_SRC_PREFIX6;
+		unsigned long parsed_src_prefix6;
+		if (!parse_unsigned_long(optarg, &parsed_src_prefix6) || parsed_src_prefix6 > 128) {
+			xtables_param_act(XTF_BAD_VALUE, "TARHASH", "--src-prefix6", optarg);
+			return false;
+		}
+		info->src_prefix8 = (uint8_t) parsed_src_prefix6;
+
 		return true;
 	}
 	return false;
@@ -141,9 +156,13 @@ static void tarhash_tg_check(unsigned int flags)
 		xtables_error(PARAMETER_PROBLEM,
 			"TARHASH: ratio must be provided");
 	}
-	if (!(flags & F_SRC_PREFIX)) {
+	if (!(flags & F_SRC_PREFIX4)) {
 		xtables_error(PARAMETER_PROBLEM,
-			"TARHASH: src-prefix must be provided");
+			"TARHASH: src-prefix4 must be provided");
+	}
+	if (!(flags & F_SRC_PREFIX6)) {
+		xtables_error(PARAMETER_PROBLEM,
+			"TARHASH: src-prefix6 must be provided");
 	}
 
 }
