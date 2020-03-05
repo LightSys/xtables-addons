@@ -90,78 +90,25 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 	printk("dest: %u\n", oth->dest);
 	printk("saddr: %u\n", iph->saddr);
 	printk("daddr: %u\n", iph->daddr);
-	printk("variant: %u\n", info->variant);
-	printk("src-prefix: %u\n", info->src_prefix);
+	//printk("variant: %u\n", info->variant);
+	//printk("src-prefix: %u\n", info->src_prefix4);
 	printk("ratio: %u\n", info->ratio);
 	printk("key: %s\n", info->key);
 
 	int hash = 0;
-        char string_to_hash[53];
-        uint32_t indexed_source_ip;
-        uint32_t src_prefix_array[] = {00000000000000000000000000000000,
-                                       10000000000000000000000000000000,
-                                       11000000000000000000000000000000,
-                                       11100000000000000000000000000000,
-                                       11110000000000000000000000000000,
-                                       11111000000000000000000000000000,
-                                       11111100000000000000000000000000,
-                                       11111110000000000000000000000000,
-                                       11111111000000000000000000000000,
-                                       11111111100000000000000000000000,
-                                       11111111110000000000000000000000,
-                                       11111111111000000000000000000000,
-                                       11111111111100000000000000000000,
-                                       11111111111110000000000000000000,
-                                       11111111111111000000000000000000,
-                                       11111111111111100000000000000000,
-                                       11111111111111110000000000000000,
-                                       11111111111111111000000000000000,
-                                       11111111111111111100000000000000,
-                                       11111111111111111110000000000000,
-                                       11111111111111111111000000000000,
-                                       11111111111111111111100000000000,
-                                       11111111111111111111110000000000,
-                                       11111111111111111111111000000000,
-                                       11111111111111111111111100000000,
-                                       11111111111111111111111110000000,
-                                       11111111111111111111111111000000,
-                                       11111111111111111111111111100000,
-                                       11111111111111111111111111110000,
-                                       11111111111111111111111111111000,
-                                       11111111111111111111111111111100,
-                                       11111111111111111111111111111110,
-                                       11111111111111111111111111111111};
+        char string_to_hash[21];
+        uint32_t indexed_source_ip = iph->saddr && info->mask4;
 
-	indexed_source_ip = iph->saddr && src_prefix_array[info->src_prefix];
-        snprintf(string_to_hash, 53, "%s %08x %08x %04x", info->key,
-                indexed_source_ip, iph->daddr, oth->dest);
+        snprintf(string_to_hash, 21, "%08x %08x %04x", indexed_source_ip,
+		 iph->daddr, oth->dest);
 
         // call hash function
 
 
-	struct crypto_shash *alg = crypto_alloc_shash("hmac(sha256)", CRYPTO_ALG_TYPE_SHASH, 0);
-	crypto_shash_setkey(alg, "key", 3);
-	unsigned int desc_size = crypto_shash_descsize(alg);
-	unsigned int alloc_size = sizeof(struct shash_desc) + desc_size;
-	struct sdesc *desc = kmalloc(alloc_size, GFP_KERNEL);
-	if (!desc) {
-		printk("allocation failed\n");
-	}
-	desc->shash.tfm = alg;
-	desc->shash.flags = 0x0;
-	unsigned char hash[32];
-	int result = crypto_shash_digest(&desc->shash, "hello", 5, hash);
-	printkhash(hash);
-	printk("value: %d\n", result);
-	kfree(desc);
-	crypto_free_shash(alg);
-	return true;
-
         if (hash % info->ratio == 0)
                 return true;
 
-
-	//Phase 2 material with storing data
+	//Phase 2 storing data
 
         return false;
 }
@@ -169,18 +116,29 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_tginfo *info) 
 {
 	int hash = 0;
-        char string_to_hash[73];
-        uint32_t indexed_source_ip;
+        char string_to_hash[69];
+	
+	__u8 *sa = iph->saddr.s6_addr;
+	__u8 *da = iph->daddr.in6_u.u6_addr8;
 
-	indexed_source_ip = iph->saddr && src_prefix_array[info->src_prefix];
-        snprintf(string_to_hash, 53, "%s %08x %08x %04x", info->key,
-                indexed_source_ip, iph->daddr, oth->dest);
+	uint8_t *ma = info->mask6;
 
-	return true;
+	snprintf(string_to_hash, 69, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %04x",
+		 sa[0] && ma[0], sa[1] && ma[1], sa[2] && ma[2], sa[3] && ma[3],
+		 sa[4] && ma[4], sa[5] && ma[5], sa[6] && ma[6], sa[7] && ma[7],
+		 sa[8] && ma[8], sa[9] && ma[9], sa[10] && ma[10],
+		 sa[11] && ma[11], sa[12] && ma[12], sa[13] && ma[13],
+		 sa[14] && ma[14], sa[15] && ma[15], da[0], da[1], da[2], da[3],
+		 da[4], da[5], da[6], da[7], da[8], da[9], da[10], da[11], da[12],
+		 da[13], da[14], da[15], oth->dest);
+
+	//call hash function
 
         if (hash % info->ratio == 0)
                 return true;
         
+	//phase 2 storing data
+
 	return false;
 }
 
