@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+actually_open=2
+total_count=65535
+
+port_count=$(nmap -p- localhost | grep -P '\d+\/tcp +open' | wc -l)
+
+(( port_count -= actually_open ))
+(( total_count -= actually_open ))
+
+ratio=$(( total_count / port_count ))
+
+echo ${ratio}
+

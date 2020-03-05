@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+sudo iptables -A INPUT -p tcp -m tcp --dport 80 \
+	-j TARHASH --tarpit \
+	--key jebjebjebjebjebjebjebjebjebjebje \
+	--ratio 100 \
+	--src-prefix 32
+
