@@ -12,7 +12,8 @@ struct xt_tarhash_tginfo {
 	uint8_t  src_prefix4;
 	uint8_t  src_prefix8;
 	uint32_t mask4;
-	uint32_t mask6[4];
+	/* TODO: add conditional compilation for wider IPv6 blocks */
+	uint8_t  mask6[16];
 	uint32_t ratio;
 	char     key[32];
 };
