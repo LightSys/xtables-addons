@@ -53,11 +53,30 @@
 #include <net/ipv6.h>
 #include <net/route.h>
 #include <net/tcp.h>
+#include <crypto/hash.h>
 #include "compat_xtables.h"
 #include "xt_TARHASH.h"
 #if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
 #	define WITH_IPV6 1
 #endif
+
+struct sdesc {
+	struct shash_desc shash;
+	char ctx[];
+};
+
+static printkhash(char *hash) {
+	size_t i = 0;
+	const char *hex = "0123456789abcdef";
+	char hex_string_hash[65];
+	hex_string_hash[64] = 0;
+	while (i < 32) {
+		hex_string_hash[i * 2] = (hex[(hash[i] >> 4) & 0xF]);
+		hex_string_hash[i * 2 + 1] = (hex[hash[i] & 0xF]);
+		i++;
+	}
+	printk("hash: %s\n", hex_string_hash);
+}
 
 static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_tginfo *info)
 {
@@ -127,6 +146,22 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 	printk("ratio: %u\n", info->ratio);
 	printk("key: %s\n", info->key);
 
+	struct crypto_shash *alg = crypto_alloc_shash("hmac(sha256)", CRYPTO_ALG_TYPE_SHASH, 0);
+	crypto_shash_setkey(alg, "key", 3);
+	unsigned int desc_size = crypto_shash_descsize(alg);
+	unsigned int alloc_size = sizeof(struct shash_desc) + desc_size;
+	struct sdesc *desc = kmalloc(alloc_size, GFP_KERNEL);
+	if (!desc) {
+		printk("allocation failed\n");
+	}
+	desc->shash.tfm = alg;
+	desc->shash.flags = 0x0;
+	unsigned char hash[32];
+	int result = crypto_shash_digest(&desc->shash, "hello", 5, hash);
+	printkhash(hash);
+	printk("value: %d\n", result);
+	kfree(desc);
+	crypto_free_shash(alg);
 	return true;
 
         if (hash % info->ratio == 0)
