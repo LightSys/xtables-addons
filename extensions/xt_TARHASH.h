@@ -14,7 +14,7 @@ struct xt_tarhash_tginfo {
 	uint32_t mask4;
 	uint32_t mask6[4];
 	uint32_t ratio;
-	char key[32];
+	char     key[32];
 };
 
 #endif /* _LINUX_NETFILTER_XT_TARHASH_H */
