@@ -1,7 +1,7 @@
 #ifndef _LINUX_NETFILTER_XT_TARHASH_H
 #define _LINUX_NETFILTER_XT_TARHASH_H 1
 
-struct xt_tarhash_tginfo {
+struct xt_tarhash_mtinfo {
 	uint8_t  src_prefix4;
 	uint32_t mask4;
 #ifdef WITH_IPV6
