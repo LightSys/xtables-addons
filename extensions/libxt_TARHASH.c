@@ -120,7 +120,7 @@ static int tarhash_tg_parse(int c, char **argv, int invert, unsigned int *flags,
 			return false;
 		}
 		info->src_prefix4 = (uint8_t) parsed_src_prefix4;
-
+		info->mask4 = (0x1<<31)>>(uint8_t) parsed_src_prefix4;
 		return true;
 	case 's6':
 		xtables_param_act(XTF_ONLY_ONCE, "TARHASH", "--src-prefix6", *flags & F_SRC_PREFIX6);
@@ -132,6 +132,19 @@ static int tarhash_tg_parse(int c, char **argv, int invert, unsigned int *flags,
 			return false;
 		}
 		info->src_prefix8 = (uint8_t) parsed_src_prefix6;
+
+		/* TODO: add conditional compilation for wider IPv6 address blocks */
+		bool zeroRest = false;
+		for (int i = 1; i <= 16; i++) {
+			if (zeroRest) info->mask6[i-1] = 0;
+			else if (parsed_src_prefix6 > (8 * i)) {
+				info->mask6[i - 1] = UINT8_MAX;
+			}
+			else {
+				info->mask6[i - 1] = (0x1<<7)>>(parsed_src_prefix6 - (8 * (16 - i)));
+				zeroRest = true;
+			}
+		}
 
 		return true;
 	}
