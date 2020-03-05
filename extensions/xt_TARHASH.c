@@ -68,13 +68,13 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 
 	/* For checking whether we can access all needed properties */
 
-	printk(oth->dest);
-	printk(iph->saddr);
-	printk(iph->daddr);
-	printk(info->variant);
-	printk(info->src_prefix);
-	printk(info->ratio);
-	printk(info->key);
+	printk("dest: %u\n", oth->dest);
+	printk("saddr: %u\n", iph->saddr);
+	printk("daddr: %u\n", iph->daddr);
+	printk("variant: %u\n", info->variant);
+	printk("src-prefix: %u\n", info->src_prefix);
+	printk("ratio: %u\n", info->ratio);
+	printk("key: %s\n", info->key);
 
 	int hash = 0;
         char string_to_hash[53];
@@ -119,13 +119,6 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 
         // call hash function
 
-	printk("dest: %u\n", oth->dest);
-	printk("saddr: %u\n", iph->saddr);
-	printk("daddr: %u\n", iph->daddr);
-	printk("variant: %u\n", info->variant);
-	printk("src-prefix: %u\n", info->src_prefix);
-	printk("ratio: %u\n", info->ratio);
-	printk("key: %s\n", info->key);
 
 	return true;
 
@@ -140,7 +133,20 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 
 static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_tginfo *info) 
 {
+	int hash = 0;
+        char string_to_hash[73];
+        uint32_t indexed_source_ip;
 
+	indexed_source_ip = iph->saddr && src_prefix_array[info->src_prefix];
+        snprintf(string_to_hash, 53, "%s %08x %08x %04x", info->key,
+                indexed_source_ip, iph->daddr, oth->dest);
+
+	return true;
+
+        if (hash % info->ratio == 0)
+                return true;
+        
+	return false;
 }
 
 static bool xttarhash_tarpit(struct tcphdr *tcph, const struct tcphdr *oth)
