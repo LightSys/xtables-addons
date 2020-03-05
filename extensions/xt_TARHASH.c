@@ -38,6 +38,7 @@
  * - Reply to TCP !SYN,!RST,!FIN with ACK, window 0 bytes, rate-limited
  */
 
+//TODO Rename files to lowercase because this is a match instead of a target.
 #include <linux/ip.h>
 #include <linux/module.h>
 #include <linux/skbuff.h>
@@ -60,7 +61,7 @@
 #	define WITH_IPV6 1
 #endif
 
-struct sdesc {
+struct xt_tarhash_sdesc {
 	struct shash_desc shash;
 	char ctx[];
 };
@@ -78,7 +79,23 @@ static printkhash(char *hash) {
 	printk("hash: %s\n", hex_string_hash);
 }
 
-static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_tginfo *info)
+static bool xttarhash_decision(const xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) {
+	unsigned char hash[32];
+	int result = crypto_shash_digest(info->desc->shash, data, datalen, hash);
+	if (result != 0) {
+		printk("failed to create hash digest\n");
+	}
+	printkhash(hash);
+	unsigned char i = 0;
+	unsigned int result = 0;
+	while (i < 32) {
+		res = (res * 256 + hash[i]) % info->ratio;
+		i++;
+	}
+	return result == 0;
+}
+
+static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
 {
 	// Make hash of (masked) source, dest, port, key
 	// Modulus by ratio
@@ -90,8 +107,6 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 	printk("dest: %u\n", oth->dest);
 	printk("saddr: %u\n", iph->saddr);
 	printk("daddr: %u\n", iph->daddr);
-	//printk("variant: %u\n", info->variant);
-	//printk("src-prefix: %u\n", info->src_prefix4);
 	printk("ratio: %u\n", info->ratio);
 	printk("key: %s\n", info->key);
 
@@ -102,18 +117,10 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
         snprintf(string_to_hash, 21, "%08x %08x %04x", indexed_source_ip,
 		 iph->daddr, oth->dest);
 
-        // call hash function
-
-
-        if (hash % info->ratio == 0)
-                return true;
-
-	//Phase 2 storing data
-
-        return false;
+	return xttarhash_decision(string_to_hash, strlen(string_to_hash));
 }
 
-static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_tginfo *info) 
+static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_mtinfo *info) 
 {
 	int hash = 0;
         char string_to_hash[69];
@@ -132,14 +139,7 @@ static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hd
 		 da[4], da[5], da[6], da[7], da[8], da[9], da[10], da[11], da[12],
 		 da[13], da[14], da[15], oth->dest);
 
-	//call hash function
-
-        if (hash % info->ratio == 0)
-                return true;
-        
-	//phase 2 storing data
-
-	return false;
+	return xttarhash_decision(string_to_hash, strlen(string_to_hash));
 }
 
 static bool xttarhash_tarpit(struct tcphdr *tcph, const struct tcphdr *oth)
@@ -254,7 +254,7 @@ static bool tarhash_generic(struct tcphdr *tcph, const struct tcphdr *oth,
 }
 
 static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
-    unsigned int hook, const struct iphdr *iph, const struct xt_tarhash_tginfo *info)
+    unsigned int hook, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
 {
 	struct tcphdr _otcph, *tcph;
 	const struct tcphdr *oth;
@@ -388,7 +388,7 @@ static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
 
 #ifdef WITH_IPV6
 static void tarhash_tcp6(struct net *net, struct sk_buff *oldskb,
-    unsigned int hook, const struct ipv6hdr *iph, const struct xt_tarhash_tginfo *info)
+    unsigned int hook, const struct ipv6hdr *iph, const struct xt_tarhash_mtinfo *info)
 {
 	struct sk_buff *nskb;
 	struct tcphdr *tcph, oth;
@@ -514,11 +514,11 @@ static void tarhash_tcp6(struct net *net, struct sk_buff *oldskb,
 #endif
 
 static unsigned int
-tarhash_tg4(struct sk_buff *skb, const struct xt_action_param *par)
+tarhash_mt4(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	const struct rtable *rt = skb_rtable(skb);
-	const struct xt_tarhash_tginfo *info = par->targinfo;
+	const struct xt_tarhash_mtinfo *info = par->targinfo;
 
 	/* Do we have an input route cache entry? (Not in PREROUTING.) */
 	if (rt == NULL)
@@ -549,11 +549,11 @@ tarhash_tg4(struct sk_buff *skb, const struct xt_action_param *par)
 
 #ifdef WITH_IPV6
 static unsigned int
-tarhash_tg6(struct sk_buff *skb, const struct xt_action_param *par)
+tarhash_mt6(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct ipv6hdr *iph = ipv6_hdr(skb);
 	const struct rt6_info *rt = (struct rt6_info *)skb_dst(skb);
-	const struct xt_tarhash_tginfo *info = par->targinfo;
+	const struct xt_tarhash_mtinfo *info = par->targinfo;
 	uint8_t proto;
 	__be16 frag_off;
 
@@ -589,15 +589,39 @@ tarhash_tg6(struct sk_buff *skb, const struct xt_action_param *par)
 }
 #endif
 
-static struct xt_target tarhash_tg_reg[] __read_mostly = {
+static int tarhash_mt_check(const struct xt_mtchk_param *par) {
+	struct xt_tarhash_mtinfo *info = par->matchinfo;
+	// TODO: allocate the algorithm once for the whole module and set the key per packet?
+	info->hash_algorithm = crypto_alloc_shash("hmac(sha256)", CRYPTO_ALG_TYPE_SHASH, 0);
+	crypto_shash_setkey(info-hash_algorithm, info->key, 32);
+	unsigned int desc_size = crypto_shash_descsize(info->hash_algorithm);
+	unsigned int alloc_size = sizeof(struct shash_desc) + desc_size;
+	info->desc = kmalloc(alloc_size, GFP_KERNEL);
+	if (!desc) {
+		printk("allocation failed\n");
+		// TODO: error out in this case.
+	}
+	info->desc->shash.tfm = info->hash_algorithm;
+	info->desc->shash.flags = 0x0;
+	printk("value: %d\n", result);
+	return 0;
+}
+
+static void tarhash_mt_destroy(const struct xt_mtdtor_param *par) {
+	struct xt_tarhash_mtinfo *info = par->matchinfo;
+	kfree(info->desc);
+	crypto_free_shash(info->hash_algorithm);
+}
+
+static struct xt_match tarhash_mt_reg[] __read_mostly = {
 	{
 		.name       = "TARHASH",
 		.revision   = 0,
 		.family     = NFPROTO_IPV4,
-		.hooks      = (1 << NF_INET_LOCAL_IN) | (1 << NF_INET_FORWARD),
-		.proto      = IPPROTO_TCP,
-		.target     = tarhash_tg4,
-		.targetsize = sizeof(struct xt_tarhash_tginfo),
+		.match      = tarhash_mt4,
+		.match_size = sizeof(struct xt_tarhash_mtinfo),
+		.checkentry = tarhash_mt_check,
+		.destroy    = tarhash_mt_destroy,
 		.me         = THIS_MODULE,
 	},
 #ifdef WITH_IPV6
@@ -605,27 +629,28 @@ static struct xt_target tarhash_tg_reg[] __read_mostly = {
 		.name       = "TARHASH",
 		.revision   = 0,
 		.family     = NFPROTO_IPV6,
-		.hooks      = (1 << NF_INET_LOCAL_IN) | (1 << NF_INET_FORWARD),
-		.proto      = IPPROTO_TCP,
-		.target     = tarhash_tg6,
-		.targetsize = sizeof(struct xt_tarhash_tginfo),
+		.match      = tarhash_mt6,
+		.match_size = sizeof(struct xt_tarhash_mtinfo),
+		.checkentry = tarhash_mt_check,
+		.destroy    = tarhash_mt_destroy,
 		.me         = THIS_MODULE,
 	},
 #endif
 };
 
-static int __init tarhash_tg_init(void)
+static int __init tarhash_mt_init(void)
 {
-	return xt_register_targets(tarhash_tg_reg, ARRAY_SIZE(tarhash_tg_reg));
+	// TODO: check that the desired algorithm is available.
+	return xt_register_targets(tarhash_mt_reg, ARRAY_SIZE(tarhash_mt_reg));
 }
 
-static void __exit tarhash_tg_exit(void)
+static void __exit tarhash_mt_exit(void)
 {
-	xt_unregister_targets(tarhash_tg_reg, ARRAY_SIZE(tarhash_tg_reg));
+	xt_unregister_targets(tarhash_mt_reg, ARRAY_SIZE(tarhash_mt_reg));
 }
 
-module_init(tarhash_tg_init);
-module_exit(tarhash_tg_exit);
+module_init(tarhash_mt_init);
+module_exit(tarhash_mt_exit);
 MODULE_DESCRIPTION("Xtables: \"TARHASH\", capture and hold TCP connections");
 MODULE_AUTHOR("Jan Engelhardt ");
 MODULE_LICENSE("GPL");
