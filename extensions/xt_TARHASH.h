@@ -14,7 +14,14 @@ struct xt_tarhash_tginfo {
 #ifdef WITH_IPV6
 	/* TODO: add conditional compilation for wider IPv6 blocks */
 	uint8_t  src_prefix6;
-	uint8_t  mask6[16];
+	union {
+		uint8_t  u_8[16];
+#if __UAPI_DEF_IN6_ADDR_ALT
+		uint16_t u_16[8];
+		uint32_t u_32[4];
+#endif
+	} mask6;
+
 #endif
 	uint32_t ratio;
 	char     key[32];

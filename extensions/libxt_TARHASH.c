@@ -147,12 +147,12 @@ static int tarhash_tg_parse(int c, char **argv, int invert, unsigned int *flags,
 		/* TODO: add conditional compilation for wider IPv6 address blocks */
 		bool zeroRest = false;
 		for (int i = 1; i <= 16; i++) {
-			if (zeroRest) info->mask6[i-1] = 0;
+			if (zeroRest) info->mask6.u_8[i-1] = 0;
 			else if (parsed_src_prefix6 > (8 * i)) {
-				info->mask6[i - 1] = UINT8_MAX;
+				info->mask6.u_8[i - 1] = UINT8_MAX;
 			}
 			else {
-				info->mask6[i - 1] = (0x1<<7)>>(parsed_src_prefix6 - (8 * (16 - i)));
+				info->mask6.u_8[i - 1] = (0x1<<7)>>(parsed_src_prefix6 - (8 * (16 - i)));
 				zeroRest = true;
 			}
 		}
