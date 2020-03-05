@@ -185,7 +185,7 @@ static void tarhash_mt_check(unsigned int flags)
 static void tarhash_mt_save(const void *ip,
     const struct xt_entry_target *target)
 {
-
+	//TODO: What is this function for? Can it be deleted?
 }
 
 static void tarhash_mt_print(const void *ip,
@@ -195,7 +195,7 @@ static void tarhash_mt_print(const void *ip,
 	tarhash_mt_save(ip, target);
 }
 
-static struct xtables_target tarhash_mt_reg = {
+static struct xtables_match tarhash_mt_reg = {
 	.version       = XTABLES_VERSION,
 	.name          = "TARHASH",
 	.family        = NFPROTO_UNSPEC,
