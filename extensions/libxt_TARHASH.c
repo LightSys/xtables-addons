@@ -19,41 +19,32 @@
 #include "compat_user.h"
 
 enum {
-	F_TARPIT      = 1 << 0,
-	F_HONEYPOT    = 1 << 1,
-	F_RESET       = 1 << 2,
-	F_KEY         = 1 << 3,
-	F_RATIO       = 1 << 4,
-	F_SRC_PREFIX4 = 1 << 5,
+	F_KEY         = 1 << 1,
+	F_RATIO       = 1 << 2,
+	F_SRC_PREFIX4 = 1 << 3,
 #ifdef WITH_IPV6
-	F_SRC_PREFIX6 = 1 << 6,
+	F_SRC_PREFIX6 = 1 << 4,
 #endif
 };
 
-static const struct option tarhash_tg_opts[] = {
-	{.name = "tarpit",      .has_arg = false, .val = 't' },
-	{.name = "honeypot",    .has_arg = false, .val = 'h' },
-	{.name = "reset",       .has_arg = false, .val = 'r' },
-	{.name = "key",         .has_arg = true,  .val = 'k' },
-	{.name = "ratio",       .has_arg = true,  .val = 'o' },
+static const struct option tarhash_mt_opts[] = {
+	{.name = "key",         .has_arg = true,  .val = 'k'},
+	{.name = "ratio",       .has_arg = true,  .val = 'o'},
 #ifdef WITH_IPV6
 	{.name = "src-prefix4", .has_arg = true,  .val = '4'},
 	{.name = "src-prefix6", .has_arg = true,  .val = '6'},
 #else
-	{.name = "src-prefix",  .has_arg = true,  .val = 's' },
+	{.name = "src-prefix",  .has_arg = true,  .val = 's'},
 #endif
 	{NULL},
 };
 
-static void tarhash_tg_help(void)
+static void tarhash_mt_help(void)
 {
 	printf(
 		"TARHASH target options:\n"
-		"  --tarpit      Enable classic 0-window tarpit (default)\n"
-		"  --honeypot    Enable honeypot option\n"
-		"  --reset       Enable inline resets\n"
-		"  --key         Seed/salt value for the hashing function\n"
-		"  --ratio       Inverse of the likelihood that a port is answered\n"
+		"  --key          Seed/salt value for the hashing function\n"
+		"  --ratio        Inverse of the likelihood that a port is answered\n"
 #ifdef WITH_IPV6
 		"  --src-prefix4  Number of bits in the source IPv4 considered in the hash function\n"
 		"  --src-prefix6  Number of bits in the source IPv6 considered in the hash function\n"
@@ -83,24 +74,12 @@ static bool parse_unsigned_long(char* str, unsigned long* out) {
 	return true;
 }
 
-static int tarhash_tg_parse(int c, char **argv, int invert, unsigned int *flags,
+static int tarhash_mt_parse(int c, char **argv, int invert, unsigned int *flags,
                            const void *entry, struct xt_entry_target **target)
 {
-	struct xt_tarhash_tginfo *info = (void *)(*target)->data;
+	struct xt_tarhash_mtinfo *info = (void *)(*target)->data;
 
 	switch (c) {
-	case 't':
-		info->variant = XTTARHASH_TARPIT;
-		*flags |= F_TARPIT;
-		return true;
-	case 'h':
-		info->variant = XTTARHASH_HONEYPOT;
-		*flags |= F_HONEYPOT;
-		return true;
-	case 'r':
-		info->variant = XTTARHASH_RESET;
-		*flags |= F_RESET;
-		return true;
 	case 'k':
 		xtables_param_act(XTF_ONLY_ONCE, "TARHASH", "--key", *flags & F_KEY);
 		xtables_param_act(XTF_NO_INVERT, "TARHASH", "--key", invert);
@@ -175,16 +154,8 @@ static int tarhash_tg_parse(int c, char **argv, int invert, unsigned int *flags,
 	return false;
 }
 
-static void tarhash_tg_check(unsigned int flags)
+static void tarhash_mt_check(unsigned int flags)
 {
-	unsigned int tarpit_flags = flags & 7;
-	if (tarpit_flags == (F_TARPIT   | F_HONEYPOT) ||
-	    tarpit_flags == (F_TARPIT   | F_RESET) ||
-	    tarpit_flags == (F_HONEYPOT | F_RESET) ||
-	    tarpit_flags == (F_TARPIT   | F_HONEYPOT | F_RESET)) {
-		xtables_error(PARAMETER_PROBLEM,
-			"TARHASH: only one action can be used at a time");
-	}
 	if (!(flags & F_KEY)) {
 		xtables_error(PARAMETER_PROBLEM,
 			"TARHASH: key must be provided");
@@ -211,47 +182,35 @@ static void tarhash_tg_check(unsigned int flags)
 
 }
 
-static void tarhash_tg_save(const void *ip,
+static void tarhash_mt_save(const void *ip,
     const struct xt_entry_target *target)
 {
-	const struct xt_tarhash_tginfo *info = (const void *)target->data;
 
-	switch (info->variant) {
-	case XTTARHASH_TARPIT:
-		printf(" --tarpit ");
-		break;
-	case XTTARHASH_HONEYPOT:
-		printf(" --honeypot ");
-		break;
-	case XTTARHASH_RESET:
-		printf(" --reset ");
-		break;
-	}
 }
 
-static void tarhash_tg_print(const void *ip,
+static void tarhash_mt_print(const void *ip,
     const struct xt_entry_target *target, int numeric)
 {
 	printf(" -j TARHASH");
-	tarhash_tg_save(ip, target);
+	tarhash_mt_save(ip, target);
 }
 
-static struct xtables_target tarhash_tg_reg = {
+static struct xtables_target tarhash_mt_reg = {
 	.version       = XTABLES_VERSION,
 	.name          = "TARHASH",
 	.family        = NFPROTO_UNSPEC,
-	.size          = XT_ALIGN(sizeof(struct xt_tarhash_tginfo)),
-	.userspacesize = XT_ALIGN(sizeof(struct xt_tarhash_tginfo)),
-	.help          = tarhash_tg_help,
-	.parse         = tarhash_tg_parse,
-	.final_check   = tarhash_tg_check,
-	.print         = tarhash_tg_print,
-	.save          = tarhash_tg_save,
-	.extra_opts    = tarhash_tg_opts,
+	.size          = XT_ALIGN(sizeof(struct xt_tarhash_mtinfo)),
+	.userspacesize = XT_ALIGN(sizeof(struct xt_tarhash_mtinfo)),
+	.help          = tarhash_mt_help,
+	.parse         = tarhash_mt_parse,
+	.final_check   = tarhash_mt_check,
+	.print         = tarhash_mt_print,
+	.save          = tarhash_mt_save,
+	.extra_opts    = tarhash_mt_opts,
 };
 
-static __attribute__((constructor)) void tarhash_tg_ldr(void)
+static __attribute__((constructor)) void tarhash_mt_ldr(void)
 {
-	xtables_register_target(&tarhash_tg_reg);
+	xtables_register_target(&tarhash_mt_reg);
 }
 
