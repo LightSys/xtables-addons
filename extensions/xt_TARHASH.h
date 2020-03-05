@@ -18,7 +18,7 @@ struct xt_tarhash_mtinfo {
 	char     key[32];
 
 	struct crypto_shash *hash_algorithm;
-	struct xt_tarhash_sdesc *sdesc;
+	struct xt_tarhash_sdesc *desc;
 };
 
 #endif /* _LINUX_NETFILTER_XT_TARHASH_H */

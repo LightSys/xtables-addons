@@ -79,17 +79,17 @@ static printkhash(char *hash) {
 	printk("hash: %s\n", hex_string_hash);
 }
 
-static bool xttarhash_decision(const xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) {
+static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) {
 	unsigned char hash[32];
-	int result = crypto_shash_digest(info->desc->shash, data, datalen, hash);
-	if (result != 0) {
+	int hash_result = crypto_shash_digest(&info->desc->shash, data, datalen, hash);
+	if (hash_result != 0) {
 		printk("failed to create hash digest\n");
 	}
 	printkhash(hash);
 	unsigned char i = 0;
 	unsigned int result = 0;
 	while (i < 32) {
-		res = (res * 256 + hash[i]) % info->ratio;
+		result = (result * 256 + hash[i]) % info->ratio;
 		i++;
 	}
 	return result == 0;
@@ -117,7 +117,7 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
         snprintf(string_to_hash, 21, "%08x %08x %04x", indexed_source_ip,
 		 iph->daddr, oth->dest);
 
-	return xttarhash_decision(string_to_hash, strlen(string_to_hash));
+	return xttarhash_decision(info, string_to_hash, strlen(string_to_hash));
 }
 
 static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_mtinfo *info) 
@@ -140,117 +140,6 @@ static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hd
 		 da[13], da[14], da[15], oth->dest);
 
 	return xttarhash_decision(string_to_hash, strlen(string_to_hash));
-}
-
-static bool xttarhash_tarpit(struct tcphdr *tcph, const struct tcphdr *oth)
-{
-	/* No replies for RST, FIN or !SYN,!ACK */
-	if (oth->rst || oth->fin || (!oth->syn && !oth->ack))
-		return false;
-	tcph->seq = oth->ack ? oth->ack_seq : 0;
-
-	/* Our SYN-ACKs must have a >0 window */
-	tcph->window = (oth->syn && !oth->ack) ? htons(5) : 0;
-	if (oth->syn && oth->ack) {
-		tcph->rst     = true;
-		tcph->ack_seq = false;
-	} else {
-		tcph->syn     = oth->syn;
-		tcph->ack     = true;
-		tcph->ack_seq = htonl(ntohl(oth->seq) + oth->syn);
-	}
-#if 0
-	/* Rate-limit replies to !SYN,ACKs */
-	if (!oth->syn && oth->ack)
-		if (!xrlim_allow(&ort->dst, HZ))
-			return false;
-#endif
-
-	return true;
-}
-
-static bool xttarhash_honeypot(struct tcphdr *tcph, const struct tcphdr *oth,
-    uint16_t payload)
-{
-	/* Do not answer any resets regardless of combination */
-	if (oth->rst || oth->seq == 0xDEADBEEF)
-		return false;
-	/* Send a reset to scanners. They like that. */
-	if (oth->syn && oth->ack) {
-		tcph->window  = 0;
-		tcph->ack     = false;
-		tcph->psh     = true;
-		tcph->ack_seq = 0xdeadbeef; /* see if they ack it */
-		tcph->seq     = oth->ack_seq;
-		tcph->rst     = true;
-	}
-
-	/* SYN > SYN-ACK */
-	if (oth->syn && !oth->ack) {
-		tcph->syn     = true;
-		tcph->ack     = true;
-		tcph->window  = oth->window &
-			((prandom_u32() & 0x1f) - 0xf);
-		tcph->seq     = htonl(prandom_u32() & ~oth->seq);
-		tcph->ack_seq = htonl(ntohl(oth->seq) + oth->syn);
-	}
-
-	/* ACK > ACK */
-	if (oth->ack && (!(oth->fin || oth->syn))) {
-		tcph->syn     = false;
-		tcph->ack     = true;
-		tcph->window  = oth->window &
-			((prandom_u32() & 0x1f) - 0xf);
-		tcph->ack_seq = payload > 100 ?
-			htonl(ntohl(oth->seq) + payload) :
-			oth->seq;
-		tcph->seq     = oth->ack_seq;
-	}
-
-	/*
-	 * FIN > RST.
-	 * We cannot terminate gracefully so just be abrupt.
-	 */
-	if (oth->fin) {
-		tcph->window  = 0;
-		tcph->seq     = oth->ack_seq;
-		tcph->ack_seq = oth->ack_seq;
-		tcph->fin     = false;
-		tcph->ack     = false;
-		tcph->rst     = true;
-	}
-
-	return true;
-}
-
-static void xttarhash_reset(struct tcphdr *tcph, const struct tcphdr *oth)
-{
-	tcph->window  = 0;
-	tcph->ack     = false;
-	tcph->syn     = false;
-	tcph->rst     = true;
-	tcph->seq     = oth->ack_seq;
-	tcph->ack_seq = oth->seq;
-}
-
-static bool tarhash_generic(struct tcphdr *tcph, const struct tcphdr *oth,
-    uint16_t payload, unsigned int mode)
-{
-	switch(mode) {
-	case XTTARHASH_TARPIT:
-		if (!xttarhash_tarpit(tcph, oth))
-			return false;
-		break;
-	case XTTARHASH_HONEYPOT:
-		if (!xttarhash_honeypot(tcph, oth, payload))
-			return false;
-		break;
-	case XTTARHASH_RESET:
-		xttarhash_reset(tcph, oth);
-		break;
-	}
-
-	return true;
 }
 
 static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
@@ -326,9 +215,6 @@ static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
 	tcph->urg_ptr = 0;
 	/* Reset flags */
 	((u_int8_t *)tcph)[13] = 0;
-
-	if (!tarhash_generic(tcph, oth, payload, mode))
-		goto free_nskb;
 
 	/* Adjust TCP checksum */
 	tcph->check = 0;
@@ -486,8 +372,6 @@ static void tarhash_tcp6(struct net *net, struct sk_buff *oldskb,
 	((uint8_t *)tcph)[13] = 0;
 
 	payload = nskb->len - sizeof(struct ipv6hdr) - sizeof(struct tcphdr);
-	if (!tarhash_generic(&oth, tcph, payload, mode))
-		goto free_nskb;
 
 	ip6h->payload_len = htons(sizeof(struct tcphdr));
 	tcph->check = 0;
@@ -513,8 +397,7 @@ static void tarhash_tcp6(struct net *net, struct sk_buff *oldskb,
 }
 #endif
 
-static unsigned int
-tarhash_mt4(struct sk_buff *skb, const struct xt_action_param *par)
+static bool tarhash_mt4(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	const struct rtable *rt = skb_rtable(skb);
@@ -548,8 +431,7 @@ tarhash_mt4(struct sk_buff *skb, const struct xt_action_param *par)
 }
 
 #ifdef WITH_IPV6
-static unsigned int
-tarhash_mt6(struct sk_buff *skb, const struct xt_action_param *par)
+static bool tarhash_mt6(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	const struct ipv6hdr *iph = ipv6_hdr(skb);
 	const struct rt6_info *rt = (struct rt6_info *)skb_dst(skb);
@@ -593,17 +475,16 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par) {
 	struct xt_tarhash_mtinfo *info = par->matchinfo;
 	// TODO: allocate the algorithm once for the whole module and set the key per packet?
 	info->hash_algorithm = crypto_alloc_shash("hmac(sha256)", CRYPTO_ALG_TYPE_SHASH, 0);
-	crypto_shash_setkey(info-hash_algorithm, info->key, 32);
+	crypto_shash_setkey(info->hash_algorithm, info->key, 32);
 	unsigned int desc_size = crypto_shash_descsize(info->hash_algorithm);
 	unsigned int alloc_size = sizeof(struct shash_desc) + desc_size;
 	info->desc = kmalloc(alloc_size, GFP_KERNEL);
-	if (!desc) {
+	if (!info->desc) {
 		printk("allocation failed\n");
 		// TODO: error out in this case.
 	}
 	info->desc->shash.tfm = info->hash_algorithm;
 	info->desc->shash.flags = 0x0;
-	printk("value: %d\n", result);
 	return 0;
 }
 
@@ -619,7 +500,7 @@ static struct xt_match tarhash_mt_reg[] __read_mostly = {
 		.revision   = 0,
 		.family     = NFPROTO_IPV4,
 		.match      = tarhash_mt4,
-		.match_size = sizeof(struct xt_tarhash_mtinfo),
+		.matchsize = sizeof(struct xt_tarhash_mtinfo),
 		.checkentry = tarhash_mt_check,
 		.destroy    = tarhash_mt_destroy,
 		.me         = THIS_MODULE,
@@ -630,7 +511,7 @@ static struct xt_match tarhash_mt_reg[] __read_mostly = {
 		.revision   = 0,
 		.family     = NFPROTO_IPV6,
 		.match      = tarhash_mt6,
-		.match_size = sizeof(struct xt_tarhash_mtinfo),
+		.matchsize = sizeof(struct xt_tarhash_mtinfo),
 		.checkentry = tarhash_mt_check,
 		.destroy    = tarhash_mt_destroy,
 		.me         = THIS_MODULE,
@@ -641,12 +522,12 @@ static struct xt_match tarhash_mt_reg[] __read_mostly = {
 static int __init tarhash_mt_init(void)
 {
 	// TODO: check that the desired algorithm is available.
-	return xt_register_targets(tarhash_mt_reg, ARRAY_SIZE(tarhash_mt_reg));
+	return xt_register_matches(tarhash_mt_reg, ARRAY_SIZE(tarhash_mt_reg));
 }
 
 static void __exit tarhash_mt_exit(void)
 {
-	xt_unregister_targets(tarhash_mt_reg, ARRAY_SIZE(tarhash_mt_reg));
+	xt_unregister_matches(tarhash_mt_reg, ARRAY_SIZE(tarhash_mt_reg));
 }
 
 module_init(tarhash_mt_init);
