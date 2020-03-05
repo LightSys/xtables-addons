@@ -67,6 +67,7 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 	// If mod is non-zero return false
 
 	/* For checking whether we can access all needed properties */
+
 	printk(oth->dest);
 	printk(iph->saddr);
 	printk(iph->daddr);
@@ -118,6 +119,16 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 
         // call hash function
 
+	printk("dest: %u\n", oth->dest);
+	printk("saddr: %u\n", iph->saddr);
+	printk("daddr: %u\n", iph->daddr);
+	printk("variant: %u\n", info->variant);
+	printk("src-prefix: %u\n", info->src_prefix);
+	printk("ratio: %u\n", info->ratio);
+	printk("key: %s\n", info->key);
+
+	return true;
+
         if (hash % info->ratio == 0)
                 return true;
 
@@ -125,6 +136,11 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 	//Phase 2 material with storing data
 
         return false;
+}
+
+static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_tginfo *info) 
+{
+
 }
 
 static bool xttarhash_tarpit(struct tcphdr *tcph, const struct tcphdr *oth)
@@ -373,7 +389,7 @@ static void tarhash_tcp4(struct net *net, struct sk_buff *oldskb,
 
 #ifdef WITH_IPV6
 static void tarhash_tcp6(struct net *net, struct sk_buff *oldskb,
-    unsigned int hook, unsigned int mode)
+    unsigned int hook, const struct ipv6hdr *iph, const struct xt_tarhash_tginfo *info)
 {
 	struct sk_buff *nskb;
 	struct tcphdr *tcph, oth;
@@ -385,6 +401,9 @@ static void tarhash_tcp6(struct net *net, struct sk_buff *oldskb,
 	uint8_t proto;
 	uint16_t payload;
 	__be16 frag_off;
+	unsigned int mode;
+
+	mode = info->variant;
 
 	proto   = oip6h->nexthdr;
 	tcphoff = ipv6_skip_exthdr(oldskb,
@@ -416,6 +435,11 @@ static void tarhash_tcp6(struct net *net, struct sk_buff *oldskb,
 		pr_debug("TCP checksum is invalid\n");
 		return;
 	}
+
+	/* Check using hash function whether tarpit response should be sent */
+	if (!xttarhash_hashdecided6(&oth, iph, info)) 
+		goto free_nskb;
+
 
 	nskb = skb_copy_expand(oldskb, LL_MAX_HEADER,
 	       skb_tailroom(oldskb), GFP_ATOMIC);
@@ -561,7 +585,7 @@ tarhash_tg6(struct sk_buff *skb, const struct xt_action_param *par)
 		pr_debug("addr is not unicast.\n");
 		return NF_DROP;
 	}
-	tarhash_tcp6(par_net(par), skb, par->state->hook, info->variant);
+	tarhash_tcp6(par_net(par), skb, par->state->hook, iph, info);
 	return NF_DROP;
 }
 #endif
