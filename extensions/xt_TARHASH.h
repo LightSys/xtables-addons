@@ -1,5 +1,8 @@
 #ifndef _LINUX_NETFILTER_XT_TARHASH_H
 #define _LINUX_NETFILTER_XT_TARHASH_H 1
+#if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
+#	define WITH_IPV6 1
+#endif
 
 struct xt_tarhash_mtinfo {
 	uint8_t  src_prefix4;
