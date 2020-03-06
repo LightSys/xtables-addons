@@ -52,7 +52,7 @@
 #include <net/tcp.h>
 #include <crypto/hash.h>
 #include "compat_xtables.h"
-#include "xt_TARHASH.h"
+#include "xt_tarhash.h"
 #if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
 #	define WITH_IPV6 1
 #endif
@@ -89,9 +89,9 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 		printk("failed to create hash digest\n");
 		return false;
 	}
-	printkhash(hash);
-	i = 0;
-	result = 0;
+	//printkhash(hash);
+	unsigned char i = 0;
+	unsigned int result = 0;
 	while (i < HASHLEN) {
 		result = (result * 256 + hash[i]) % info->ratio;
 		i++;
@@ -105,16 +105,21 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 	char string_to_hash[IP4HSIZE];
 
 	/* For checking whether we can access all needed properties */
-	printk("dest: %u\n", oth->dest);
-	printk("saddr: %u\n", iph->saddr);
-	printk("daddr: %u\n", iph->daddr);
+	/*printk("dest port: %u\n", be16_to_cpu(oth->dest));
+	printk("source ip: %u\n", be32_to_cpu(iph->saddr));
+	printk("dest ip: %u\n", be32_to_cpu(iph->daddr));
 	printk("ratio: %u\n", info->ratio);
-	printk("key: %s\n", info->key);
+	printk("key: %s\n", info->key);*/
 
-    	indexed_source_ip = iph->saddr && info->mask4;
+        char string_to_hash[21];
+        uint32_t indexed_source_ip = be32_to_cpu(iph->saddr) & info->mask4;
 
-    	snprintf(string_to_hash, IP4HSIZE, "%08x %08x %04x", indexed_source_ip,
-		iph->daddr, oth->dest);
+	printk("source ip: %u\n", be32_to_cpu(iph->saddr));
+	printk("     mask: %u\n", info->mask4);	
+	printk("masked ip: %u\n", indexed_source_ip);
+
+        snprintf(string_to_hash, IP4HSIZE, "%08x%08x%04x", indexed_source_ip,
+		 be32_to_cpu(iph->daddr), be16_to_cpu(oth->dest));
 
 	return xttarhash_decision(info, string_to_hash, IP4HSIZE - 1);
 }
@@ -126,16 +131,25 @@ static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hd
 	
 	const __u8 *sa = iph->saddr.s6_addr;
 	const __u8 *da = iph->daddr.in6_u.u6_addr8;
+	char saddr[16];
+	int i;
+	const uint8_t *ma;
 
-	const uint8_t *ma = info->mask6;
+	ma = info->mask6;
 
-	snprintf(string_to_hash, IP6HSIZE, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %04x",
-		 sa[0] && ma[0], sa[1] && ma[1], sa[2] && ma[2], sa[3] && ma[3],
-		 sa[4] && ma[4], sa[5] && ma[5], sa[6] && ma[6], sa[7] && ma[7],
-		 sa[8] && ma[8], sa[9] && ma[9], sa[10] && ma[10],
-		 sa[11] && ma[11], sa[12] && ma[12], sa[13] && ma[13],
-		 sa[14] && ma[14], sa[15] && ma[15], da[0], da[1], da[2], da[3],
-		 da[4], da[5], da[6], da[7], da[8], da[9], da[10], da[11], da[12],
+	i = 0;
+	while (i < 16) {
+		saddr[i] = sa[i] && ma[i];
+		i++;
+	}
+
+	snprintf(string_to_hash, IP6HSIZE, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%04x",
+		 saddr[0],  saddr[1],  saddr[2],  saddr[3],
+		 saddr[4],  saddr[5],  saddr[6],  saddr[7],
+		 saddr[8],  saddr[9],  saddr[10], saddr[11],
+		 saddr[12], saddr[13], saddr[14], saddr[15], 
+		 da[0],  da[1],  da[2],  da[3],  da[4],  da[5], da[6], 
+		 da[7],  da[8],  da[9],  da[10], da[11], da[12],
 		 da[13], da[14], da[15], oth->dest);
 
 	return xttarhash_decision(info, string_to_hash, IP6HSIZE - 1);
@@ -309,7 +323,7 @@ static void tarhash_mt_destroy(const struct xt_mtdtor_param *par) {
 
 static struct xt_match tarhash_mt_reg[] __read_mostly = {
 	{
-		.name       = "TARHASH",
+		.name       = "tarhash",
 		.revision   = 0,
 		.family     = NFPROTO_IPV4,
 		.match      = tarhash_mt4,
@@ -320,7 +334,7 @@ static struct xt_match tarhash_mt_reg[] __read_mostly = {
 	},
 #ifdef WITH_IPV6
 	{
-		.name       = "TARHASH",
+		.name       = "tarhash",
 		.revision   = 0,
 		.family     = NFPROTO_IPV6,
 		.match      = tarhash_mt6,
@@ -345,8 +359,8 @@ static void __exit tarhash_mt_exit(void)
 
 module_init(tarhash_mt_init);
 module_exit(tarhash_mt_exit);
-MODULE_DESCRIPTION("Xtables: \"TARHASH\", capture and hold TCP connections");
+MODULE_DESCRIPTION("Xtables: \"tarhash\", capture and hold TCP connections");
 MODULE_AUTHOR("Jan Engelhardt ");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("ipt_TARHASH");
-MODULE_ALIAS("ip6t_TARHASH");
+MODULE_ALIAS("ipt_tarhash");
+MODULE_ALIAS("ip6t_tarhash");
