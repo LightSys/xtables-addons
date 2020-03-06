@@ -1,20 +1,21 @@
 .PP
-Nondeterministically capture incoming TCP connections and store a fingerprint
+Deterministically capture incoming TCP connections and store a fingerprint
 of the connection to later distinguish between legitimate and malicious
 scanning/attacking.
 .PP
-TARHASH is very similar to TARHASH, but tracks a hash-based identifier for
-later analysis. A combination of the specified input key, masked source ip
-address (i.e.  the N most significant bits of the source), destination IP
-address, and destination port are used to create a fairly unique hash for a
-group of requests. The hash is computed modulo a specified ratio so that any
-requests with the same inputs will receive the same behavior from the server.
+TARHASH tracks a hash-based identifier for later analysis. A combination 
+of the specified input key, masked source ip address (i.e.  the N most 
+significant bits of the source), destination IP address, and destination 
+port are used to create a fairly unique hash for a group of requests. 
+The hash is computed modulo a specified ratio so that any requests with 
+the same inputs will receive the same behavior from the server.
 .TP
 \fB\-\-key\fP
 The key that seeds the randomness of the output hashes. Fulfills the same
 function as a password salt does in database; thus, even if an attacker knows
 the algorithm used to compute the hash, which is essentially public knowledge,
-the hashes are unpredictable because the key is secret.
+the hashes are unpredictable because the key is secret. The key must be 32
+characters in length.
 .TP
 \fB\-\-ratio\fP
 The modulo used on the computed hash. This quantity controls the likelihood
@@ -23,11 +24,13 @@ for different source and destination IP addresses, since the hash depends on
 these values. However, for specific source and destination IP addresses, the
 port numbers will be random yet static. An example value for this option is
 1000, which would mean that 1 in every 1000 ports is answered; likewise, a
-value of 100 means that 1 in every 100 ports is answered.
+value of 100 means that 1 in every 100 ports is answered. The specified
+ratio must be between 1 and 429499672955.
 .TP
 \fB\-\-src\-prefix\fP
 The number of most significant bits to use when computing hashes. A value of
 32, which is the number of bits in an IPv4 address, would then incorperate the
 whole address into the hash. Using a value less than this would have the effect
 of treating several IP addresses as a single source; for example, a value of 24
-would treat a whole class C range of addresses as the same.
+would treat a whole class C range of addresses as the same. In practice,
+each address in the range will receive the same behavior from the server.
