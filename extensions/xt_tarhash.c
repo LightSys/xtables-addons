@@ -56,13 +56,6 @@
 #	define WITH_IPV6 1
 #endif
 
-#define IP4HSIZE                  21
-#define IP6HSIZE                  69
-#define MAX_HASHLEN               128
-#define MAX_PRINTK_HEX_STRING_LEN 257
-#define DEBUG                     1     /* 1 for debug kernel logging, 0 for none
-				           debug elements should probably be removed in final product */
-
 struct xt_tarhash_sdesc
 {
 	struct shash_desc shash;
@@ -77,7 +70,7 @@ static void printk_hex_string(const char *buf, const size_t buflen)
 	char output[MAX_PRINTK_HEX_STRING_LEN];
 
 	if (buflen > MAX_PRINTK_HEX_STRING_LEN) {
-		printk("Too long of a string to print\n");
+		printk(KERN_ERR TARHASH "Too long of a string to print\n");
 		return;
 	}
 	hex = "0123456789abcdef";
@@ -88,7 +81,7 @@ static void printk_hex_string(const char *buf, const size_t buflen)
 		output[i * 2 + 1] = (hex[buf[i] & 0xF]);
 		i++;
 	}
-	printk(KERN_DEBUG "%s\n", output);
+	printk(KERN_DEBUG TARHASH "%s\n", output);
 }
 
 static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash)
@@ -109,7 +102,7 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 	/* perform the actual hash calculation and check for error */
 	int hash_result = crypto_shash_digest(&info->desc->shash, data, datalen, hash);
 	if (hash_result != 0) {
-		printk(KERN_ERR "failed to create hash digest\n");
+		printk(KERN_ERR TARHASH "failed to create hash digest\n");
 		return false;
 	}
 
@@ -137,13 +130,13 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 
 #ifdef DEBUG
 	/* For checking whether we can access all needed properties */
-	printk(KERN_DEBUG "dest port: %u\n", be16_to_cpu(oth->dest));
-	printk(KERN_DEBUG "source ip: %u\n", be32_to_cpu(iph->saddr));
-	printk(KERN_DEBUG "  dest ip: %u\n", be32_to_cpu(iph->daddr));
-	printk(KERN_DEBUG "    ratio: %u\n", info->ratio);
-	printk(KERN_DEBUG "      key: %s\n", info->key);
-	printk(KERN_DEBUG "     mask: %u\n", info->mask4);	
-	printk(KERN_DEBUG "masked ip: %u\n", indexed_source_ip);
+	printk(KERN_DEBUG TARHASH "dest port: %u\n", be16_to_cpu(oth->dest));
+	printk(KERN_DEBUG TARHASH "source ip: %u\n", be32_to_cpu(iph->saddr));
+	printk(KERN_DEBUG TARHASH "  dest ip: %u\n", be32_to_cpu(iph->daddr));
+	printk(KERN_DEBUG TARHASH "    ratio: %u\n", info->ratio);
+	printk(KERN_DEBUG TARHASH "      key: %s\n", info->key);
+	printk(KERN_DEBUG TARHASH "     mask: %u\n", info->mask4);	
+	printk(KERN_DEBUG TARHASH "masked ip: %u\n", indexed_source_ip);
 #endif        
 	/* format the hash string */
 	snprintf(string_to_hash, IP4HSIZE, "%08x%08x%04x", indexed_source_ip,
@@ -181,7 +174,7 @@ static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hd
 	
 
 #ifdef DEBUG
-	printk(KERN_INFO "ipv6 string to hash: %s\n", string_to_hash);
+	printk(KERN_INFO TARHASH "ipv6 string to hash: %s\n", string_to_hash);
 	printk_hex_string(ma, 16);
 #endif
 
@@ -329,20 +322,18 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par)
 	unsigned int alloc_size;
 
 	info = par->matchinfo;
-	// TODO: allocate the algorithm once for the whole module and set the key per packet?
-	// TODO check that the crypto algorithm is actually available. Options
-	// include having several default algorithms that we check in
-	// succession, or just letting the user specify the hash algorithm and
-	// return an error if that algorithm is not available.
-	info->hash_algorithm = crypto_alloc_shash("hmac(sha1-avx2)", CRYPTO_ALG_TYPE_SHASH, 0); 
-	// TODO ensure that the digest length is less than MAX_HASHLEN
+	info->hash_algorithm = crypto_alloc_shash(HASH_ALGORITHM, CRYPTO_ALG_TYPE_SHASH, 0); 
 	info->digest_length = crypto_shash_digestsize(info->hash_algorithm);
+	if (info->digest_length > MAX_HASHLEN) {
+		printk(KERN_ERR TARHASH "digest length for hash algorithm is too long.\n");
+		return -EINVAL;
+	}
 	crypto_shash_setkey(info->hash_algorithm, info->key, info->digest_length);
 	desc_size = crypto_shash_descsize(info->hash_algorithm);
 	alloc_size = sizeof(struct shash_desc) + desc_size;
 	info->desc = kmalloc(alloc_size, GFP_KERNEL);
 	if (!info->desc) {
-		printk(KERN_ERR "allocation failed\n");
+		printk(KERN_ERR TARHASH "allocation failed\n");
 		return -EINVAL;	
 	}
 	info->desc->shash.tfm = info->hash_algorithm;
@@ -384,7 +375,10 @@ static struct xt_match tarhash_mt_reg[] __read_mostly = {
 
 static int __init tarhash_mt_init(void)
 {
-	// TODO: check that the desired algorithm is available.
+	if (request_module(HASH_ALGORITHM) < 0) {
+		printk(KERN_ERR TARHASH "request_module('%s') error.\n", HASH_ALGORITHM);
+		return -ENXIO;
+	}
 	return xt_register_matches(tarhash_mt_reg, ARRAY_SIZE(tarhash_mt_reg));
 }
 
