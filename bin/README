@@ -1,0 +1,14 @@
+##add-rule
+This will call the iptables command to add(-A) a rule to the INPUT chain of the iptable. This rule is only going to be dropping tcp packets (-p tcp) and it will be a match rule for tcp packets(-m tcp_ with the destination port as port 80(--dport 80). The rule and that is being setup is the TARHASH match and it is given the necessary parameters(key, ratio, src-prefix4, src-prefix6) and sets the target to TARPIT. For details on TARHASH and its parameters see the TARHASH man page.
+
+##add-tarhash
+Add the TARHASH module.
+
+##readd-tarhash
+Remove and then add back the TARHASH module by calling the remove-tarhash and add-tarhash scripts.
+
+##remove-tarhash
+This will delete all of the rules associated with the TARHASH and then remove the TARHASH module.
+
+##test-tarhash
+This will run nmap on the localhost and use relevent information about the ports that are closed and open to come up with a ratio. This allows the verification that the ratio it comes up with is consistent with the ratio given in the iptables TARHASH rule. 
