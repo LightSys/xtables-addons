@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-actually_open=2
-total_count=65535
+actually_open=0
+total_count=1000
 
 port_count=$(nmap -p- localhost | grep -P '\d+\/tcp +open' | wc -l)
 
