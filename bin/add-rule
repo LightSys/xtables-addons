@@ -4,7 +4,7 @@ sudo ip6tables -A INPUT -p tcp -m tcp ! --dport 22 \
 	--key jebjebjebjebjebjebjebjebjebjebjd \
 	--ratio 20 \
 	--src-prefix4 17 \
-	--src-prefix6 128 \
+	--src-prefix6 124 \
 	-j TARPIT --tarpit
 
 sudo iptables -A INPUT -p tcp -m tcp ! --dport 22 \

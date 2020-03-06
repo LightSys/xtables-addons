@@ -118,7 +118,7 @@ static int sting_mt_parse(int c, char **argv, int invert, unsigned int *flags,
 		for (int i = 0; i < 16; i++) {
 			if (i < parsed_src_prefix6 / 8) {
 				info->mask6[i] = UINT8_MAX;
-			} else if (i == parsed_src_prefix6 / 8 && parsed_src_prefix6 % 8 == 0) {
+			} else if (i == parsed_src_prefix6 / 8 && parsed_src_prefix6 % 8 != 0) {
 				info->mask6[i] = ((char)(0x1 << 7) >> ((parsed_src_prefix6 % 8) - 1));
 			} else {
 				info->mask6[i] = 0;

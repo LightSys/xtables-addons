@@ -63,7 +63,7 @@ struct xt_sting_sdesc
 };
 
 # ifdef DEBUG
-static void printk_hex_string(const char *buf, const size_t buflen)
+static void printk_hex_string(const char *prompt, const unsigned char *buf, const size_t buflen)
 {
 	size_t i;
 	const char *hex;
@@ -77,18 +77,18 @@ static void printk_hex_string(const char *buf, const size_t buflen)
 	output[buflen * 2] = 0;
 	i = 0;
 	while (i < buflen) {
-		output[i * 2] = (hex[(buf[i] >> 4) & 0xF]);
-		output[i * 2 + 1] = (hex[buf[i] & 0xF]);
+		output[i * 2] = hex[(buf[i] >> 4) & 0xF];
+		output[i * 2 + 1] = hex[buf[i] & 0xF];
 		i++;
 	}
-	printk(KERN_DEBUG STING "%s\n", output);
+	printk(KERN_DEBUG STING "%s:\t%s\n", prompt, output);
 }
 
 static void printkhash(const struct xt_sting_mtinfo *info, char *hash)
 {
 	unsigned int digest_length;
 	digest_length = info->digest_length;
-	printk_hex_string(hash, digest_length);
+	printk_hex_string("hash", hash, digest_length);
 }
 #endif
 
@@ -158,7 +158,7 @@ static bool xtsting_dohash6(const struct tcphdr *oth, const struct ipv6hdr *iph,
 	/* mask the IP address */
 	i = 0;
 	while (i < 16) {
-		saddr[i] = sa[i] && ma[i];
+		saddr[i] = sa[i] & ma[i];
 		i++;
 	}
 
@@ -175,7 +175,9 @@ static bool xtsting_dohash6(const struct tcphdr *oth, const struct ipv6hdr *iph,
 
 #ifdef DEBUG
 	printk(KERN_INFO STING "ipv6 string to hash: %s\n", string_to_hash);
-	printk_hex_string(ma, 16);
+	printk_hex_string("mask", ma, 16);
+	printk_hex_string("saddr", saddr, 16);
+	printk_hex_string("da", da, 16);
 #endif
 
 	return xtsting_decision(info, string_to_hash, IP6HSIZE - 1);
