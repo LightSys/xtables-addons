@@ -59,6 +59,7 @@
 
 #define IP4HSIZE  21
 #define IP6HSIZE  69
+#define HASHLEN   32
 
 struct xt_tarhash_sdesc {
 	struct shash_desc shash;
@@ -70,7 +71,7 @@ static void printkhash(char *hash) {
 	const char *hex = "0123456789abcdef";
 	char hex_string_hash[65];
 	hex_string_hash[64] = 0;
-	while (i < 32) {
+	while (i < HASHLEN) {
 		hex_string_hash[i * 2] = (hex[(hash[i] >> 4) & 0xF]);
 		hex_string_hash[i * 2 + 1] = (hex[hash[i] & 0xF]);
 		i++;
@@ -79,7 +80,7 @@ static void printkhash(char *hash) {
 }
 
 static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) {
-	unsigned char hash[32];
+	unsigned char hash[HASHLEN];
 	unsigned char i;
 	unsigned int result;
 
@@ -90,25 +91,19 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 	printkhash(hash);
 	i = 0;
 	result = 0;
-	while (i < 32) {
+	while (i < HASHLEN) {
 		result = (result * 256 + hash[i]) % info->ratio;
 		i++;
 	}
 	return result == 0;
 }
 
-static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
+static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
 {
-	// Make hash of (masked) source, dest, port, key
-	// Modulus by ratio
-	// If mod is 0, return true
-	// If mod is non-zero return false
-
-	/* For checking whether we can access all needed properties */
-
 	uint32_t indexed_source_ip;
 	char string_to_hash[IP4HSIZE];
 
+	/* For checking whether we can access all needed properties */
 	printk("dest: %u\n", oth->dest);
 	printk("saddr: %u\n", iph->saddr);
 	printk("daddr: %u\n", iph->daddr);
@@ -123,6 +118,7 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 	return xttarhash_decision(info, string_to_hash, IP4HSIZE - 1);
 }
 
+#ifdef WITH_IPV6
 static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_mtinfo *info) 
 {
         char string_to_hash[IP6HSIZE];
@@ -143,6 +139,7 @@ static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hd
 
 	return xttarhash_decision(info, string_to_hash, IP6HSIZE - 1);
 }
+#endif
 
 static bool tarhash_tcp4(struct net *net, const struct sk_buff *oldskb,
     unsigned int hook, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
@@ -160,7 +157,7 @@ static bool tarhash_tcp4(struct net *net, const struct sk_buff *oldskb,
 		return false;
 
 	/* Check using hash function whether tarpit response should be sent */
-	return xttarhash_hashdecided(oth, iph, info);
+	return xttarhash_hashdecided4(oth, iph, info);
 }
 
 #ifdef WITH_IPV6
