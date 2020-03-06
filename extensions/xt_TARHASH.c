@@ -42,12 +42,8 @@
 #include <linux/ip.h>
 #include <linux/module.h>
 #include <linux/skbuff.h>
-#include <linux/version.h>
 #include <linux/netfilter_ipv6.h>
 #include <linux/netfilter/x_tables.h>
-#ifdef CONFIG_BRIDGE_NETFILTER
-#	include <linux/netfilter_bridge.h>
-#endif
 #include <net/addrconf.h>
 #include <net/ip6_checksum.h>
 #include <net/ip6_route.h>
@@ -60,6 +56,9 @@
 #if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
 #	define WITH_IPV6 1
 #endif
+
+#define IP4HSIZE  21
+#define IP6HSIZE  69
 
 struct xt_tarhash_sdesc {
 	struct shash_desc shash;
@@ -81,13 +80,16 @@ static void printkhash(char *hash) {
 
 static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) {
 	unsigned char hash[32];
+	unsigned char i;
+	unsigned int result;
+
 	int hash_result = crypto_shash_digest(&info->desc->shash, data, datalen, hash);
 	if (hash_result != 0) {
 		printk("failed to create hash digest\n");
 	}
 	printkhash(hash);
-	unsigned char i = 0;
-	unsigned int result = 0;
+	i = 0;
+	result = 0;
 	while (i < 32) {
 		result = (result * 256 + hash[i]) % info->ratio;
 		i++;
@@ -104,31 +106,33 @@ static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *
 
 	/* For checking whether we can access all needed properties */
 
+	uint32_t indexed_source_ip;
+	char string_to_hash[IP4HSIZE];
+
 	printk("dest: %u\n", oth->dest);
 	printk("saddr: %u\n", iph->saddr);
 	printk("daddr: %u\n", iph->daddr);
 	printk("ratio: %u\n", info->ratio);
 	printk("key: %s\n", info->key);
 
-        char string_to_hash[21];
-        uint32_t indexed_source_ip = iph->saddr && info->mask4;
+    	indexed_source_ip = iph->saddr && info->mask4;
 
-        snprintf(string_to_hash, 21, "%08x %08x %04x", indexed_source_ip,
-		 iph->daddr, oth->dest);
+    	snprintf(string_to_hash, IP4HSIZE, "%08x %08x %04x", indexed_source_ip,
+		iph->daddr, oth->dest);
 
-	return xttarhash_decision(info, string_to_hash, strlen(string_to_hash));
+	return xttarhash_decision(info, string_to_hash, IP4HSIZE - 1);
 }
 
 static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_mtinfo *info) 
 {
-        char string_to_hash[69];
+        char string_to_hash[IP6HSIZE];
 	
 	const __u8 *sa = iph->saddr.s6_addr;
 	const __u8 *da = iph->daddr.in6_u.u6_addr8;
 
 	const uint8_t *ma = info->mask6;
 
-	snprintf(string_to_hash, 69, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %04x",
+	snprintf(string_to_hash, IP6HSIZE, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %04x",
 		 sa[0] && ma[0], sa[1] && ma[1], sa[2] && ma[2], sa[3] && ma[3],
 		 sa[4] && ma[4], sa[5] && ma[5], sa[6] && ma[6], sa[7] && ma[7],
 		 sa[8] && ma[8], sa[9] && ma[9], sa[10] && ma[10],
@@ -137,7 +141,7 @@ static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hd
 		 da[4], da[5], da[6], da[7], da[8], da[9], da[10], da[11], da[12],
 		 da[13], da[14], da[15], oth->dest);
 
-	return xttarhash_decision(info, string_to_hash, strlen(string_to_hash));
+	return xttarhash_decision(info, string_to_hash, IP6HSIZE - 1);
 }
 
 static bool tarhash_tcp4(struct net *net, const struct sk_buff *oldskb,
@@ -279,12 +283,16 @@ static bool tarhash_mt6(const struct sk_buff *skb, struct xt_action_param *par)
 #endif
 
 static int tarhash_mt_check(const struct xt_mtchk_param *par) {
-	struct xt_tarhash_mtinfo *info = par->matchinfo;
+	struct xt_tarhash_mtinfo *info;
+	unsigned int desc_size;
+	unsigned int alloc_size;
+
+	info = par->matchinfo;
 	// TODO: allocate the algorithm once for the whole module and set the key per packet?
 	info->hash_algorithm = crypto_alloc_shash("hmac(sha256)", CRYPTO_ALG_TYPE_SHASH, 0);
 	crypto_shash_setkey(info->hash_algorithm, info->key, 32);
-	unsigned int desc_size = crypto_shash_descsize(info->hash_algorithm);
-	unsigned int alloc_size = sizeof(struct shash_desc) + desc_size;
+	desc_size = crypto_shash_descsize(info->hash_algorithm);
+	alloc_size = sizeof(struct shash_desc) + desc_size;
 	info->desc = kmalloc(alloc_size, GFP_KERNEL);
 	if (!info->desc) {
 		printk("allocation failed\n");
