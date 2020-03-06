@@ -57,9 +57,9 @@
 #	define WITH_IPV6 1
 #endif
 
-#define IP4HSIZE    21
-#define IP6HSIZE    69
-#define MAX_HASHLEN 128
+#define IP4HSIZE            21
+#define IP6HSIZE            69
+#define MAX_HASHLEN         128
 #define MAX_HASH_STRING_LEN 256
 
 struct xt_tarhash_sdesc {
@@ -68,32 +68,36 @@ struct xt_tarhash_sdesc {
 };
 
 static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash) {
-	size_t i = 0;
-	const char *hex = "0123456789abcdef";
+	size_t i;
 	char hex_string_hash[MAX_HASH_STRING_LEN];
+	unsigned int digest_length;
+	const char *hex = "0123456789abcdef";
+
+	i = 0;
 	hex_string_hash[MAX_HASHLEN * 2] = 0;
-	unsigned int digest_length = info->digest_length;
+	digest_length = info->digest_length;
 	hex_string_hash[digest_length * 2] = '\0';
 	while (i < digest_length) {
 		hex_string_hash[i * 2] = (hex[(hash[i] >> 4) & 0xF]);
 		hex_string_hash[i * 2 + 1] = (hex[hash[i] & 0xF]);
 		i++;
 	}
-	printk("hash: %s\n", hex_string_hash);
+	printk(KERN_DEBUG "hash: %s\n", hex_string_hash);
 }
 
-static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) {
+static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) 
+{
 	unsigned char hash[MAX_HASHLEN];
-	unsigned char i;
+	unsigned size_t i;
 	unsigned int result;
 	unsigned int digest_length;
 
 	int hash_result = crypto_shash_digest(&info->desc->shash, data, datalen, hash);
 	if (hash_result != 0) {
-		printk("failed to create hash digest\n");
+		printk(KERN_ERR "failed to create hash digest\n");
 		return false;
 	}
-	printkhash(info, hash);
+	printkhash(KERN_DEBUG info, hash);
 	i = 0;
 	result = 0;
 	digest_length = info->digest_length;
@@ -110,18 +114,18 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 	char string_to_hash[IP4HSIZE];
 
 	/* For checking whether we can access all needed properties */
-	/*printk("dest port: %u\n", be16_to_cpu(oth->dest));
-	printk("source ip: %u\n", be32_to_cpu(iph->saddr));
-	printk("dest ip: %u\n", be32_to_cpu(iph->daddr));
-	printk("ratio: %u\n", info->ratio);
-	printk("key: %s\n", info->key);*/
+	/*printk(KERN_DEBUG "dest port: %u\n", be16_to_cpu(oth->dest));
+	printk(KERN_DEBUG "source ip: %u\n", be32_to_cpu(iph->saddr));
+	printk(KERN_DEBUG "dest ip: %u\n", be32_to_cpu(iph->daddr));
+	printk(KERN_DEBUG "ratio: %u\n", info->ratio);
+	printk(KERN_DEBUG "key: %s\n", info->key);*/
 
         indexed_source_ip = be32_to_cpu(iph->saddr) & info->mask4;
         string_to_hash[21];
 
-	// printk("source ip: %u\n", be32_to_cpu(iph->saddr));
-	// printk("     mask: %u\n", info->mask4);	
-	// printk("masked ip: %u\n", indexed_source_ip);
+	// printk(KERN_DEBUG "source ip: %u\n", be32_to_cpu(iph->saddr));
+	// printk(KERN_DEBUG "     mask: %u\n", info->mask4);	
+	// printk(KERN_DEBUG "masked ip: %u\n", indexed_source_ip);
 
         snprintf(string_to_hash, IP4HSIZE, "%08x%08x%04x", indexed_source_ip,
 		 be32_to_cpu(iph->daddr), be16_to_cpu(oth->dest));
@@ -137,7 +141,7 @@ static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hd
 	const __u8 *sa = iph->saddr.s6_addr;
 	const __u8 *da = iph->daddr.in6_u.u6_addr8;
 	char saddr[16];
-	int i;
+	size_t i;
 	const uint8_t *ma;
 
 	ma = info->mask6;
@@ -229,8 +233,8 @@ static bool tarhash_tcp6(struct net *net, const struct sk_buff *oldskb,
 
 static bool tarhash_mt4(const struct sk_buff *skb, struct xt_action_param *par)
 {
-	const struct iphdr *iph = ip_hdr(skb);
 	const struct rtable *rt = skb_rtable(skb);
+	const struct iphdr *iph = ip_hdr(skb);
 	const struct xt_tarhash_mtinfo *info = par->targinfo;
 
 	/* Do we have an input route cache entry? (Not in PREROUTING.) */
@@ -318,7 +322,7 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par) {
 	alloc_size = sizeof(struct shash_desc) + desc_size;
 	info->desc = kmalloc(alloc_size, GFP_KERNEL);
 	if (!info->desc) {
-		printk("allocation failed\n");
+		printk(KERN_ERR "allocation failed\n");
 		// TODO: error out in this case.
 	}
 	info->desc->shash.tfm = info->hash_algorithm;
