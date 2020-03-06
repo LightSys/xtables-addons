@@ -60,15 +60,18 @@
 #define IP6HSIZE            69
 #define MAX_HASHLEN         128
 #define MAX_HASH_STRING_LEN 256
-#define DEBUG               1     /* 1 for debug kernel logging, 0 for none */
+#define DEBUG               1     /* 1 for debug kernel logging, 0 for none
+				     debug elements should probably be removed in final product */
 
-struct xt_tarhash_sdesc {
+struct xt_tarhash_sdesc
+{
 	struct shash_desc shash;
 	char ctx[];
 };
 
 # ifdef DEBUG
-static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash) {
+static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash)
+{
 	size_t i;
 	char hex_string_hash[MAX_HASH_STRING_LEN];
 	unsigned int digest_length;
@@ -94,6 +97,7 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 	unsigned int result;
 	unsigned int digest_length;
 
+	/* perform the actual hash calculation and check for error */
 	int hash_result = crypto_shash_digest(&info->desc->shash, data, datalen, hash);
 	if (hash_result != 0) {
 		printk(KERN_ERR "failed to create hash digest\n");
@@ -103,7 +107,8 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 #ifdef DEBUG	
 	printkhash(KERN_DEBUG info, hash);
 #endif
-
+	
+	/* mod the hash by ratio to determine match */
 	i = 0;
 	result = 0;
 	digest_length = info->digest_length;
@@ -111,7 +116,7 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 		result = (result * 256 + hash[i]) % info->ratio;
 		i++;
 	}
-	return result == 0;
+	return (result == 0);
 }
 
 static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
@@ -119,9 +124,7 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 	uint32_t indexed_source_ip;
 	char string_to_hash[IP4HSIZE];
 
-
         indexed_source_ip = be32_to_cpu(iph->saddr) & info->mask4;
-        string_to_hash[21];
 
 #ifdef DEBUG
 	/* For checking whether we can access all needed properties */
@@ -133,7 +136,7 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 	printk(KERN_DEBUG "     mask: %u\n", info->mask4);	
 	printk(KERN_DEBUG "masked ip: %u\n", indexed_source_ip);
 #endif        
-
+	/* format the hash string */
 	snprintf(string_to_hash, IP4HSIZE, "%08x%08x%04x", indexed_source_ip,
 		 be32_to_cpu(iph->daddr), be16_to_cpu(oth->dest));
 
@@ -144,21 +147,20 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_mtinfo *info) 
 {
         char string_to_hash[IP6HSIZE];
-	
 	const __u8 *sa = iph->saddr.s6_addr;
 	const __u8 *da = iph->daddr.in6_u.u6_addr8;
 	char saddr[16];
 	size_t i;
-	const uint8_t *ma;
-
-	ma = info->mask6;
-
+	const uint8_t *ma = info->mask6;
+	
+	/* mask the IP address */
 	i = 0;
 	while (i < 16) {
 		saddr[i] = sa[i] && ma[i];
 		i++;
 	}
 
+	/* format the hash string */
 	snprintf(string_to_hash, IP6HSIZE, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%04x",
 		 saddr[0],  saddr[1],  saddr[2],  saddr[3],
 		 saddr[4],  saddr[5],  saddr[6],  saddr[7],
@@ -233,7 +235,7 @@ static bool tarhash_tcp6(struct net *net, const struct sk_buff *oldskb,
 		return false;
 	}
 
-	/* Check using hash function whether tarpit response should be sent */
+	/* Check using hash function whether packet should continue */
 	return xttarhash_hashdecided6(&oth, iph, info);
 }
 #endif
@@ -267,6 +269,8 @@ static bool tarhash_mt4(const struct sk_buff *skb, struct xt_action_param *par)
 	/* We are not interested in fragments */
 	if (iph->frag_off & htons(IP_OFFSET))
 		return false;
+
+	/* Check using hash function whether packet should continue */
 	return tarhash_tcp4(par_net(par), skb, par->state->hook, iph, info);
 }
 
@@ -310,7 +314,8 @@ static bool tarhash_mt6(const struct sk_buff *skb, struct xt_action_param *par)
 }
 #endif
 
-static int tarhash_mt_check(const struct xt_mtchk_param *par) {
+static int tarhash_mt_check(const struct xt_mtchk_param *par)
+{
 	struct xt_tarhash_mtinfo *info;
 	unsigned int desc_size;
 	unsigned int alloc_size;
@@ -337,7 +342,8 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par) {
 	return 0;
 }
 
-static void tarhash_mt_destroy(const struct xt_mtdtor_param *par) {
+static void tarhash_mt_destroy(const struct xt_mtdtor_param *par)
+{
 	struct xt_tarhash_mtinfo *info = par->matchinfo;
 	kfree(info->desc);
 	crypto_free_shash(info->hash_algorithm);
