@@ -1,7 +1,9 @@
 # TARHASH
-TARHASH is a fork of TARPIT with a similar, but more specific purpose: *to
-deterministically respond to a TCP connection for the purpose of identifying
-the real IP address(es) of an attacker*.
+TARHASH is a matching module with the specific purpose to deterministically 
+respond to a TCP connection for the purpose of identifying the real IP 
+address(es) of an attacker. It will filter through incoming packets and 
+send certain packets, determined using entropy, to TARPIT and otherwise 
+pass the packet forward.
 
 ## Building
 ### Prerequisites
@@ -19,7 +21,7 @@ install whatever packages it's asking for.
 
 ### Compiling the Modules
 At this point, you're ready to start building the code itself. Per convention,
-`make` is all that need to be run to build all the modules. You make want to
+`make` is all that need to be run to build all the modules. You may want to
 run `make -jn` where `n` is the number of available cores on your machine.
 This will speed up the build by using all of the cores instead of `make`'s
 default of a single core.
