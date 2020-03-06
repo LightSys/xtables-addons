@@ -34,3 +34,13 @@ whole address into the hash. Using a value less than this would have the effect
 of treating several IP addresses as a single source; for example, a value of 24
 would treat a whole class C range of addresses as the same. In practice,
 each address in the range will receive the same behavior from the server.
+.TP
+\fB\-\-src\-prefix4\fP
+When compiled to support IPv6, this parameter replaces --src-prefix, setting
+the source prefix for IPv4 traffic.  The --src-prefix6 parameter must also
+be specified.
+.TP
+\fB\-\-src\-prefix6\fP
+When compiled to support IPv6, this parameter replaces --src-prefix, setting
+the source prefix for IPv6 traffic.  The --src-prefix4 parameter must also
+be specified.
