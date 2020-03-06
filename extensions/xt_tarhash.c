@@ -68,7 +68,7 @@ struct xt_tarhash_sdesc {
 };
 
 # ifdef DEBUG
-static void debugprintkhash(const struct xt_tarhash_mtinfo *info, char *hash) {
+static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash) {
 	size_t i;
 	char hex_string_hash[MAX_HASH_STRING_LEN];
 	unsigned int digest_length;
