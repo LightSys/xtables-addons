@@ -3,15 +3,15 @@ sudo ip6tables -A INPUT -p tcp -m tcp ! --dport 22 \
 	-m sting \
 	--key jebjebjebjebjebjebjebjebjebjebjd \
 	--ratio 20 \
-	--src-prefix4 17 \
-	--src-prefix6 124 \
+	--src-prefix4 32 \
+	--src-prefix6 128 \
 	-j TARPIT --tarpit
 
 sudo iptables -A INPUT -p tcp -m tcp ! --dport 22 \
 	-m sting \
-	--key jebjebjebjebjebjebjebjebjebjebjd \
+	--key jebjebjebjebjebjebjebjebjebjebjc \
 	--ratio 20 \
-	--src-prefix4 17 \
+	--src-prefix4 32 \
 	--src-prefix6 128 \
 	-j TARPIT --tarpit
 
