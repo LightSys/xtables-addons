@@ -117,6 +117,7 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 	printk("key: %s\n", info->key);*/
 
         indexed_source_ip = be32_to_cpu(iph->saddr) & info->mask4;
+        string_to_hash[21];
 
 	// printk("source ip: %u\n", be32_to_cpu(iph->saddr));
 	// printk("     mask: %u\n", info->mask4);	

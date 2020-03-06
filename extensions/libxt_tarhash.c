@@ -87,7 +87,7 @@ static int tarhash_mt_parse(int c, char **argv, int invert, unsigned int *flags,
 		xtables_param_act(XTF_NO_INVERT, "tarhash", "--ratio", invert);
 		*flags |= F_RATIO;
 		unsigned long parsed_ratio;
-		if (!parse_unsigned_long(optarg, &parsed_ratio) || parsed_ratio > UINT32_MAX) {
+		if (!parse_unsigned_long(optarg, &parsed_ratio) || parsed_ratio > UINT32_MAX || parsed_ratio < 1) {
 			xtables_param_act(XTF_BAD_VALUE, "tarhash", "--ratio", optarg);
 			return false;
 		}
@@ -102,7 +102,6 @@ static int tarhash_mt_parse(int c, char **argv, int invert, unsigned int *flags,
 			xtables_param_act(XTF_BAD_VALUE, "tarhash", "--src-prefix4", optarg);
 			return false;
 		}
-		info->src_prefix4 = parsed_src_prefix4;
 		info->mask4 = (0x1 << 31) >> ((uint8_t)parsed_src_prefix4 - 1);
 		return true;
 	case '6':
