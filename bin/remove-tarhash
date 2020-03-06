@@ -14,4 +14,20 @@ while true; do
 	fi
 		
 done
+
+while true; do
+	rule_indices=$(sudo ip6tables --list-rules INPUT | grep -n tarhash | cut -d: -f1)
+	rule_index=
+	for i in $rule_indices; do
+		rule_index=$i
+		break
+	done
+	if [ -z "$rule_index" ]; then
+		break
+	else
+		echo removing rule $rule_index
+		sudo ip6tables --delete INPUT $(( rule_index - 1 ))
+	fi
+		
+done
 sudo rmmod xt_tarhash
