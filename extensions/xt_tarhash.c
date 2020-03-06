@@ -38,7 +38,6 @@
  * - Reply to TCP !SYN,!RST,!FIN with ACK, window 0 bytes, rate-limited
  */
 
-//TODO Rename files to lowercase because this is a match instead of a target.
 #include <linux/ip.h>
 #include <linux/module.h>
 #include <linux/skbuff.h>
@@ -323,7 +322,7 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par) {
 	info->desc = kmalloc(alloc_size, GFP_KERNEL);
 	if (!info->desc) {
 		printk(KERN_ERR "allocation failed\n");
-		// TODO: error out in this case.
+		return -EINVAL;	
 	}
 	info->desc->shash.tfm = info->hash_algorithm;
 	info->desc->shash.flags = 0x0;
