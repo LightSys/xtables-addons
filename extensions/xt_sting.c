@@ -121,7 +121,7 @@ static bool xtsting_decision(const struct xt_sting_mtinfo* info, const char *dat
 	return (result == 0);
 }
 
-static bool xtsting_hashdecided4(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_sting_mtinfo *info)
+static bool xtsting_dohash4(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_sting_mtinfo *info)
 {
 	uint32_t indexed_source_ip;
 	char string_to_hash[IP4HSIZE];
@@ -146,7 +146,7 @@ static bool xtsting_hashdecided4(const struct tcphdr *oth, const struct iphdr *i
 }
 
 #ifdef WITH_IPV6
-static bool xtsting_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_sting_mtinfo *info) 
+static bool xtsting_dohash6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_sting_mtinfo *info) 
 {
         char string_to_hash[IP6HSIZE];
 	const __u8 *sa = iph->saddr.s6_addr;
@@ -198,7 +198,7 @@ static bool sting_tcp4(struct net *net, const struct sk_buff *oldskb,
 		return false;
 
 	/* Check using hash function whether tarpit response should be sent */
-	return xtsting_hashdecided4(oth, iph, info);
+	return xtsting_dohash4(oth, iph, info);
 }
 
 #ifdef WITH_IPV6
@@ -237,7 +237,7 @@ static bool sting_tcp6(struct net *net, const struct sk_buff *oldskb,
 	}
 
 	/* Check using hash function whether tarpit response should be sent */
-	return xtsting_hashdecided6(&oth, iph, info);
+	return xtsting_dohash6(&oth, iph, info);
 }
 #endif
 
