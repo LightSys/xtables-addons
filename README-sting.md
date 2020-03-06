@@ -1,5 +1,5 @@
-# TARHASH
-TARHASH is a matching module with the specific purpose to deterministically 
+# sting
+sting is a matching module with the specific purpose to deterministically 
 respond to a TCP connection for the purpose of identifying the real IP 
 address(es) of an attacker. It will filter through incoming packets and 
 allows certain packets to advance down the chain, determined using entropy,
@@ -7,7 +7,7 @@ to targets father down the chain.
 
 ## Building
 ### Prerequisites
-To build TARHASH (and all of the other xtables-addons modules), you must first
+To build sting (and all of the other xtables-addons modules), you must first
 make sure you have the libxt headers installed.  This will look different
 depending on which distro the target machine is running, but the
 `iptables-devel` package often contains those.
@@ -32,10 +32,10 @@ documentation. This must be run as root (by using `sudo` or some other means)
 because it installs files into system directories.
 
 ## Running
-Since xtables-addons (and by extension TARHASH) are extensions to iptables, all
-you need to get TARHASH up and running is to run an `iptables` with a `-j
-TARHASH` followed by the TARHASH options. For details on how to configure the
-TARHASH extension, see the man page for `xtables-addons` which will be
+Since xtables-addons (and by extension sting) are extensions to iptables, all
+you need to get sting up and running is to run an `iptables` with a `-j
+sting` followed by the sting options. For details on how to configure the
+sting extension, see the man page for `xtables-addons` which will be
 installed to your system when you run `make install`.
 
 ## Testing

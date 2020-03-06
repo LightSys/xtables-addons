@@ -51,12 +51,12 @@
 #include <net/tcp.h>
 #include <crypto/hash.h>
 #include "compat_xtables.h"
-#include "xt_tarhash.h"
+#include "xt_sting.h"
 #if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
 #	define WITH_IPV6 1
 #endif
 
-struct xt_tarhash_sdesc
+struct xt_sting_sdesc
 {
 	struct shash_desc shash;
 	char ctx[];
@@ -70,7 +70,7 @@ static void printk_hex_string(const char *buf, const size_t buflen)
 	char output[MAX_PRINTK_HEX_STRING_LEN];
 
 	if (buflen > MAX_PRINTK_HEX_STRING_LEN) {
-		printk(KERN_ERR TARHASH "Too long of a string to print\n");
+		printk(KERN_ERR STING "Too long of a string to print\n");
 		return;
 	}
 	hex = "0123456789abcdef";
@@ -81,10 +81,10 @@ static void printk_hex_string(const char *buf, const size_t buflen)
 		output[i * 2 + 1] = (hex[buf[i] & 0xF]);
 		i++;
 	}
-	printk(KERN_DEBUG TARHASH "%s\n", output);
+	printk(KERN_DEBUG STING "%s\n", output);
 }
 
-static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash)
+static void printkhash(const struct xt_sting_mtinfo *info, char *hash)
 {
 	unsigned int digest_length;
 	digest_length = info->digest_length;
@@ -92,7 +92,7 @@ static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash)
 }
 #endif
 
-static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) 
+static bool xtsting_decision(const struct xt_sting_mtinfo* info, const char *data, unsigned char datalen) 
 {
 	unsigned char hash[MAX_HASHLEN];
 	size_t i;
@@ -102,7 +102,7 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 	/* perform the actual hash calculation and check for error */
 	int hash_result = crypto_shash_digest(&info->desc->shash, data, datalen, hash);
 	if (hash_result != 0) {
-		printk(KERN_ERR TARHASH "failed to create hash digest\n");
+		printk(KERN_ERR STING "failed to create hash digest\n");
 		return false;
 	}
 
@@ -121,7 +121,7 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 	return (result == 0);
 }
 
-static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
+static bool xtsting_hashdecided4(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_sting_mtinfo *info)
 {
 	uint32_t indexed_source_ip;
 	char string_to_hash[IP4HSIZE];
@@ -130,23 +130,23 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 
 #ifdef DEBUG
 	/* For checking whether we can access all needed properties */
-	printk(KERN_DEBUG TARHASH "dest port: %u\n", be16_to_cpu(oth->dest));
-	printk(KERN_DEBUG TARHASH "source ip: %u\n", be32_to_cpu(iph->saddr));
-	printk(KERN_DEBUG TARHASH "  dest ip: %u\n", be32_to_cpu(iph->daddr));
-	printk(KERN_DEBUG TARHASH "    ratio: %u\n", info->ratio);
-	printk(KERN_DEBUG TARHASH "      key: %s\n", info->key);
-	printk(KERN_DEBUG TARHASH "     mask: %u\n", info->mask4);	
-	printk(KERN_DEBUG TARHASH "masked ip: %u\n", indexed_source_ip);
+	printk(KERN_DEBUG STING "dest port: %u\n", be16_to_cpu(oth->dest));
+	printk(KERN_DEBUG STING "source ip: %u\n", be32_to_cpu(iph->saddr));
+	printk(KERN_DEBUG STING "  dest ip: %u\n", be32_to_cpu(iph->daddr));
+	printk(KERN_DEBUG STING "    ratio: %u\n", info->ratio);
+	printk(KERN_DEBUG STING "      key: %s\n", info->key);
+	printk(KERN_DEBUG STING "     mask: %u\n", info->mask4);	
+	printk(KERN_DEBUG STING "masked ip: %u\n", indexed_source_ip);
 #endif        
 	/* format the hash string */
 	snprintf(string_to_hash, IP4HSIZE, "%08x%08x%04x", indexed_source_ip,
 		 be32_to_cpu(iph->daddr), be16_to_cpu(oth->dest));
 
-	return xttarhash_decision(info, string_to_hash, IP4HSIZE - 1);
+	return xtsting_decision(info, string_to_hash, IP4HSIZE - 1);
 }
 
 #ifdef WITH_IPV6
-static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_mtinfo *info) 
+static bool xtsting_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_sting_mtinfo *info) 
 {
         char string_to_hash[IP6HSIZE];
 	const __u8 *sa = iph->saddr.s6_addr;
@@ -174,16 +174,16 @@ static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hd
 	
 
 #ifdef DEBUG
-	printk(KERN_INFO TARHASH "ipv6 string to hash: %s\n", string_to_hash);
+	printk(KERN_INFO STING "ipv6 string to hash: %s\n", string_to_hash);
 	printk_hex_string(ma, 16);
 #endif
 
-	return xttarhash_decision(info, string_to_hash, IP6HSIZE - 1);
+	return xtsting_decision(info, string_to_hash, IP6HSIZE - 1);
 }
 #endif
 
-static bool tarhash_tcp4(struct net *net, const struct sk_buff *oldskb,
-    unsigned int hook, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
+static bool sting_tcp4(struct net *net, const struct sk_buff *oldskb,
+    unsigned int hook, const struct iphdr *iph, const struct xt_sting_mtinfo *info)
 {
 	struct tcphdr _otcph;
 	const struct tcphdr *oth;
@@ -198,12 +198,12 @@ static bool tarhash_tcp4(struct net *net, const struct sk_buff *oldskb,
 		return false;
 
 	/* Check using hash function whether tarpit response should be sent */
-	return xttarhash_hashdecided4(oth, iph, info);
+	return xtsting_hashdecided4(oth, iph, info);
 }
 
 #ifdef WITH_IPV6
-static bool tarhash_tcp6(struct net *net, const struct sk_buff *oldskb,
-    unsigned int hook, const struct ipv6hdr *iph, const struct xt_tarhash_mtinfo *info)
+static bool sting_tcp6(struct net *net, const struct sk_buff *oldskb,
+    unsigned int hook, const struct ipv6hdr *iph, const struct xt_sting_mtinfo *info)
 {
 	struct tcphdr oth;
 	unsigned int otcplen;
@@ -237,15 +237,15 @@ static bool tarhash_tcp6(struct net *net, const struct sk_buff *oldskb,
 	}
 
 	/* Check using hash function whether tarpit response should be sent */
-	return xttarhash_hashdecided6(&oth, iph, info);
+	return xtsting_hashdecided6(&oth, iph, info);
 }
 #endif
 
-static bool tarhash_mt4(const struct sk_buff *skb, struct xt_action_param *par)
+static bool sting_mt4(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	const struct rtable *rt = skb_rtable(skb);
 	const struct iphdr *iph = ip_hdr(skb);
-	const struct xt_tarhash_mtinfo *info = par->targinfo;
+	const struct xt_sting_mtinfo *info = par->targinfo;
 
 	/* Do we have an input route cache entry? (Not in PREROUTING.) */
 	if (rt == NULL)
@@ -272,15 +272,15 @@ static bool tarhash_mt4(const struct sk_buff *skb, struct xt_action_param *par)
 		return false;
 
 	/* Check using hash function whether packet should continue */
-	return tarhash_tcp4(par_net(par), skb, par->state->hook, iph, info);
+	return sting_tcp4(par_net(par), skb, par->state->hook, iph, info);
 }
 
 #ifdef WITH_IPV6
-static bool tarhash_mt6(const struct sk_buff *skb, struct xt_action_param *par)
+static bool sting_mt6(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	const struct ipv6hdr *iph = ipv6_hdr(skb);
 	const struct rt6_info *rt = (struct rt6_info *)skb_dst(skb);
-	const struct xt_tarhash_mtinfo *info = par->targinfo;
+	const struct xt_sting_mtinfo *info = par->targinfo;
 	uint8_t proto;
 	__be16 frag_off;
 
@@ -311,13 +311,13 @@ static bool tarhash_mt6(const struct sk_buff *skb, struct xt_action_param *par)
 		pr_debug("addr is not unicast.\n");
 		return false;
 	}
-	return tarhash_tcp6(par_net(par), skb, par->state->hook, iph, info);
+	return sting_tcp6(par_net(par), skb, par->state->hook, iph, info);
 }
 #endif
 
-static int tarhash_mt_check(const struct xt_mtchk_param *par)
+static int sting_mt_check(const struct xt_mtchk_param *par)
 {
-	struct xt_tarhash_mtinfo *info;
+	struct xt_sting_mtinfo *info;
 	unsigned int desc_size;
 	unsigned int alloc_size;
 
@@ -325,7 +325,7 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par)
 	info->hash_algorithm = crypto_alloc_shash(HASH_ALGORITHM, CRYPTO_ALG_TYPE_SHASH, 0); 
 	info->digest_length = crypto_shash_digestsize(info->hash_algorithm);
 	if (info->digest_length > MAX_HASHLEN) {
-		printk(KERN_ERR TARHASH "digest length for hash algorithm is too long.\n");
+		printk(KERN_ERR STING "digest length for hash algorithm is too long.\n");
 		return -EINVAL;
 	}
 	crypto_shash_setkey(info->hash_algorithm, info->key, info->digest_length);
@@ -333,7 +333,7 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par)
 	alloc_size = sizeof(struct shash_desc) + desc_size;
 	info->desc = kmalloc(alloc_size, GFP_KERNEL);
 	if (!info->desc) {
-		printk(KERN_ERR TARHASH "allocation failed\n");
+		printk(KERN_ERR STING "allocation failed\n");
 		return -EINVAL;	
 	}
 	info->desc->shash.tfm = info->hash_algorithm;
@@ -341,56 +341,56 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par)
 	return 0;
 }
 
-static void tarhash_mt_destroy(const struct xt_mtdtor_param *par)
+static void sting_mt_destroy(const struct xt_mtdtor_param *par)
 {
-	struct xt_tarhash_mtinfo *info = par->matchinfo;
+	struct xt_sting_mtinfo *info = par->matchinfo;
 	kfree(info->desc);
 	crypto_free_shash(info->hash_algorithm);
 }
 
-static struct xt_match tarhash_mt_reg[] __read_mostly = {
+static struct xt_match sting_mt_reg[] __read_mostly = {
 	{
-		.name       = "tarhash",
+		.name       = "sting",
 		.revision   = 0,
 		.family     = NFPROTO_IPV4,
-		.match      = tarhash_mt4,
-		.matchsize  = sizeof(struct xt_tarhash_mtinfo),
-		.checkentry = tarhash_mt_check,
-		.destroy    = tarhash_mt_destroy,
+		.match      = sting_mt4,
+		.matchsize  = sizeof(struct xt_sting_mtinfo),
+		.checkentry = sting_mt_check,
+		.destroy    = sting_mt_destroy,
 		.me         = THIS_MODULE,
 	},
 #ifdef WITH_IPV6
 	{
-		.name       = "tarhash",
+		.name       = "sting",
 		.revision   = 0,
 		.family     = NFPROTO_IPV6,
-		.match      = tarhash_mt6,
-		.matchsize  = sizeof(struct xt_tarhash_mtinfo),
-		.checkentry = tarhash_mt_check,
-		.destroy    = tarhash_mt_destroy,
+		.match      = sting_mt6,
+		.matchsize  = sizeof(struct xt_sting_mtinfo),
+		.checkentry = sting_mt_check,
+		.destroy    = sting_mt_destroy,
 		.me         = THIS_MODULE,
 	},
 #endif
 };
 
-static int __init tarhash_mt_init(void)
+static int __init sting_mt_init(void)
 {
 	if (request_module(HASH_ALGORITHM) < 0) {
-		printk(KERN_ERR TARHASH "request_module('%s') error.\n", HASH_ALGORITHM);
+		printk(KERN_ERR STING "request_module('%s') error.\n", HASH_ALGORITHM);
 		return -ENXIO;
 	}
-	return xt_register_matches(tarhash_mt_reg, ARRAY_SIZE(tarhash_mt_reg));
+	return xt_register_matches(sting_mt_reg, ARRAY_SIZE(sting_mt_reg));
 }
 
-static void __exit tarhash_mt_exit(void)
+static void __exit sting_mt_exit(void)
 {
-	xt_unregister_matches(tarhash_mt_reg, ARRAY_SIZE(tarhash_mt_reg));
+	xt_unregister_matches(sting_mt_reg, ARRAY_SIZE(sting_mt_reg));
 }
 
-module_init(tarhash_mt_init);
-module_exit(tarhash_mt_exit);
-MODULE_DESCRIPTION("Xtables: \"tarhash\", capture and hold TCP connections");
+module_init(sting_mt_init);
+module_exit(sting_mt_exit);
+MODULE_DESCRIPTION("Xtables: \"sting\", capture and hold TCP connections");
 MODULE_AUTHOR("Jan Engelhardt ");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("ipt_tarhash");
-MODULE_ALIAS("ip6t_tarhash");
+MODULE_ALIAS("ipt_sting");
+MODULE_ALIAS("ip6t_sting");

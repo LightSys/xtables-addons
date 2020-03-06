@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 sudo ip6tables -A INPUT -p tcp -m tcp ! --dport 22 \
-	-m tarhash \
+	-m sting \
 	--key jebjebjebjebjebjebjebjebjebjebjd \
 	--ratio 20 \
 	--src-prefix4 17 \
@@ -8,7 +8,7 @@ sudo ip6tables -A INPUT -p tcp -m tcp ! --dport 22 \
 	-j TARPIT --tarpit
 
 sudo iptables -A INPUT -p tcp -m tcp ! --dport 22 \
-	-m tarhash \
+	-m sting \
 	--key jebjebjebjebjebjebjebjebjebjebjd \
 	--ratio 20 \
 	--src-prefix4 17 \

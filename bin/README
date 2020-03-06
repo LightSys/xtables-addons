@@ -1,14 +1,23 @@
-##add-rule
-Calls the iptables command to add (-A) a rule to the INPUT chain of the iptable. This rule will drop tcp packets (-p tcp) and is a match rule for tcp packets (-m tcp) with the destination port as port 80 (--dport 80). The rule sets up TARHASH with the necessary parameters (key, ratio, src-prefix4, src-prefix6) and sets the target to TARPIT. For details on TARHASH and its parameters see the TARHASH man page.
+## add-rule
+Calls the iptables command to add (-A) a rule to the INPUT chain of the
+iptable. This rule will drop tcp packets (-p tcp) and is a match rule for tcp
+packets (-m tcp) with the destination port as port 80 (--dport 80). The rule
+sets up sting with the necessary parameters (key, ratio, src-prefix4,
+src-prefix6) and sets the target to TARPIT. For details on sting and its
+parameters see the sting man page.
 
-##add-tarhash
-Adds the TARHASH module.
+## add-sting
+Adds the sting module.
 
-##readd-tarhash
-Removes and then adds back the TARHASH module by calling the remove-tarhash and add-tarhash scripts.
+## readd-sting
+Removes and then adds back the sting module by calling the remove-sting and
+add-sting scripts.
 
-##remove-tarhash
-Deletes all of the rules associated with TARHASH and removes the TARHASH module.
+## remove-sting
+Deletes all of the rules associated with sting and removes the sting module.
 
-##test-tarhash
-Runs nmap on localhost and uses relevent information about the ports that are closed and open to come up with a ratio. This experimental ratio can be compared with the ratio set by the add-rule script to verify that TARHASH is dropping packets at the correct rate. 
+## test-sting
+Runs nmap on localhost and uses relevent information about the ports that are
+closed and open to come up with a ratio. This experimental ratio can be
+compared with the ratio set by the add-rule script to verify that sting is
+dropping packets at the correct rate. 

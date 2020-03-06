@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 while true; do
-	rule_indices=$(sudo iptables --list-rules INPUT | grep -n tarhash | cut -d: -f1)
+	rule_indices=$(sudo iptables --list-rules INPUT | grep -n sting | cut -d: -f1)
 	rule_index=
 	for i in $rule_indices; do
 		rule_index=$i
@@ -16,7 +16,7 @@ while true; do
 done
 
 while true; do
-	rule_indices=$(sudo ip6tables --list-rules INPUT | grep -n tarhash | cut -d: -f1)
+	rule_indices=$(sudo ip6tables --list-rules INPUT | grep -n sting | cut -d: -f1)
 	rule_index=
 	for i in $rule_indices; do
 		rule_index=$i
@@ -30,4 +30,4 @@ while true; do
 	fi
 		
 done
-sudo rmmod xt_tarhash
+sudo rmmod xt_sting

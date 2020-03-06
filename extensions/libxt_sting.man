@@ -3,7 +3,7 @@ Deterministically capture incoming TCP connections and store a fingerprint
 of the connection to later distinguish between legitimate and malicious
 scanning/attacking.
 .PP
-TARHASH tracks a hash-based identifier for later analysis. A combination 
+sting tracks a hash-based identifier for later analysis. A combination 
 of the specified input key, masked source ip address (i.e.  the N most 
 significant bits of the source), destination IP address, and destination 
 port are used to create a fairly unique hash for a group of requests. 
