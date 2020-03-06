@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 sudo iptables -A INPUT -p tcp -m tcp --dport 80 \
-	-j TARHASH --tarpit \
+	-m TARHASH \
 	--key jebjebjebjebjebjebjebjebjebjebje \
 	--ratio 100 \
-	--src-prefix 32
+	--src-prefix4 32 \
+	--src-prefix6 128 \
+	-j TARPIT --tarpit
 
