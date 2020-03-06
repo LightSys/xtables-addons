@@ -57,21 +57,24 @@
 #	define WITH_IPV6 1
 #endif
 
-#define IP4HSIZE  21
-#define IP6HSIZE  69
-#define HASHLEN   32
+#define IP4HSIZE    21
+#define IP6HSIZE    69
+#define MAX_HASHLEN 128
+#define MAX_HASH_STRING_LEN 256
 
 struct xt_tarhash_sdesc {
 	struct shash_desc shash;
 	char ctx[];
 };
 
-static void printkhash(char *hash) {
+static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash) {
 	size_t i = 0;
 	const char *hex = "0123456789abcdef";
-	char hex_string_hash[65];
-	hex_string_hash[64] = 0;
-	while (i < HASHLEN) {
+	char hex_string_hash[MAX_HASH_STRING_LEN];
+	hex_string_hash[MAX_HASHLEN * 2] = 0;
+	unsigned int digest_length = info->digest_length;
+	hex_string_hash[digest_length * 2] = '\0';
+	while (i < digest_length) {
 		hex_string_hash[i * 2] = (hex[(hash[i] >> 4) & 0xF]);
 		hex_string_hash[i * 2 + 1] = (hex[hash[i] & 0xF]);
 		i++;
@@ -80,19 +83,21 @@ static void printkhash(char *hash) {
 }
 
 static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) {
-	unsigned char hash[HASHLEN];
+	unsigned char hash[MAX_HASHLEN];
 	unsigned char i;
 	unsigned int result;
+	unsigned int digest_length;
 
 	int hash_result = crypto_shash_digest(&info->desc->shash, data, datalen, hash);
 	if (hash_result != 0) {
 		printk("failed to create hash digest\n");
 		return false;
 	}
-	//printkhash(hash);
-	unsigned char i = 0;
-	unsigned int result = 0;
-	while (i < HASHLEN) {
+	printkhash(info, hash);
+	i = 0;
+	result = 0;
+	digest_length = info->digest_length;
+	while (i < digest_length) {
 		result = (result * 256 + hash[i]) % info->ratio;
 		i++;
 	}
@@ -111,12 +116,11 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 	printk("ratio: %u\n", info->ratio);
 	printk("key: %s\n", info->key);*/
 
-        char string_to_hash[21];
-        uint32_t indexed_source_ip = be32_to_cpu(iph->saddr) & info->mask4;
+        indexed_source_ip = be32_to_cpu(iph->saddr) & info->mask4;
 
-	printk("source ip: %u\n", be32_to_cpu(iph->saddr));
-	printk("     mask: %u\n", info->mask4);	
-	printk("masked ip: %u\n", indexed_source_ip);
+	// printk("source ip: %u\n", be32_to_cpu(iph->saddr));
+	// printk("     mask: %u\n", info->mask4);	
+	// printk("masked ip: %u\n", indexed_source_ip);
 
         snprintf(string_to_hash, IP4HSIZE, "%08x%08x%04x", indexed_source_ip,
 		 be32_to_cpu(iph->daddr), be16_to_cpu(oth->dest));
@@ -301,8 +305,14 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par) {
 
 	info = par->matchinfo;
 	// TODO: allocate the algorithm once for the whole module and set the key per packet?
-	info->hash_algorithm = crypto_alloc_shash("hmac(sha256)", CRYPTO_ALG_TYPE_SHASH, 0);
-	crypto_shash_setkey(info->hash_algorithm, info->key, 32);
+	// TODO check that the crypto algorithm is actually available. Options
+	// include having several default algorithms that we check in
+	// succession, or just letting the user specify the hash algorithm and
+	// return an error if that algorithm is not available.
+	info->hash_algorithm = crypto_alloc_shash("md5", CRYPTO_ALG_TYPE_SHASH, 0); 
+	// TODO ensure that the digest length is less than MAX_HASHLEN
+	info->digest_length = crypto_shash_digestsize(info->hash_algorithm);
+	crypto_shash_setkey(info->hash_algorithm, info->key, info->digest_length);
 	desc_size = crypto_shash_descsize(info->hash_algorithm);
 	alloc_size = sizeof(struct shash_desc) + desc_size;
 	info->desc = kmalloc(alloc_size, GFP_KERNEL);

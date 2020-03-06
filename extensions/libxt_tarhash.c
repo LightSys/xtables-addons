@@ -1,5 +1,5 @@
 /*
- *	"tarhash" target extension to iptables
+ *	"tarhash" match extension to iptables
  *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License; either
@@ -39,7 +39,7 @@ static const struct option tarhash_mt_opts[] = {
 static void tarhash_mt_help(void)
 {
 	printf(
-		"tarhash target options:\n"
+		"tarhash match options:\n"
 		"  --key          Seed/salt value for the hashing function\n"
 		"  --ratio        Inverse of the likelihood that a port is answered\n"
 		"  --src-prefix4  Number of bits in the source IPv4 considered in the hash function\n"
@@ -54,8 +54,8 @@ static bool parse_unsigned_long(char* str, unsigned long* out) {
 	errno = 0;
 	val = strtoul(str, &end, 10);
 
-	if (errno == ERANGE && val == ULONG_MAX ||
-	    errno != 0 && val == 0) {
+	if ((errno == ERANGE && val == ULONG_MAX) ||
+	    (errno != 0 && val == 0)) {
 		return false;
 	}
 
@@ -68,9 +68,9 @@ static bool parse_unsigned_long(char* str, unsigned long* out) {
 }
 
 static int tarhash_mt_parse(int c, char **argv, int invert, unsigned int *flags,
-                           const void *entry, struct xt_entry_target **target)
+                           const void *entry, struct xt_entry_match **match)
 {
-	struct xt_tarhash_mtinfo *info = (void *)(*target)->data;
+	struct xt_tarhash_mtinfo *info = (void *)(*match)->data;
 
 	switch (c) {
 	case 'k':
@@ -102,7 +102,7 @@ static int tarhash_mt_parse(int c, char **argv, int invert, unsigned int *flags,
 			xtables_param_act(XTF_BAD_VALUE, "tarhash", "--src-prefix4", optarg);
 			return false;
 		}
-		info->src_prefix4 = (uint8_t) parsed_src_prefix4;
+		info->src_prefix4 = parsed_src_prefix4;
 		info->mask4 = (0x1 << 31) >> ((uint8_t)parsed_src_prefix4 - 1);
 		return true;
 	case '6':
@@ -114,16 +114,16 @@ static int tarhash_mt_parse(int c, char **argv, int invert, unsigned int *flags,
 			xtables_param_act(XTF_BAD_VALUE, "tarhash", "--src-prefix6", optarg);
 			return false;
 		}
-		/* TODO: add conditional compilation for wider IPv6 address blocks */
-		bool zeroRest = false;
+		info->src_prefix6 = parsed_src_prefix6;
+		bool zero_rest = false;
 		for (int i = 1; i <= 16; i++) {
-			if (zeroRest) info->mask6[i-1] = 0;
+			if (zero_rest) info->mask6[i-1] = 0;
 			else if (parsed_src_prefix6 > (8 * i)) {
 				info->mask6[i - 1] = UINT8_MAX;
 			}
 			else {
 				info->mask6[i - 1] = (0x1<<7)>>(parsed_src_prefix6 - (8 * (16 - i)));
-				zeroRest = true;
+				zero_rest = true;
 			}
 		}
 		return true;
@@ -152,16 +152,22 @@ static void tarhash_mt_check(unsigned int flags)
 }
 
 static void tarhash_mt_save(const void *ip,
-    const struct xt_entry_target *target)
+    const struct xt_entry_match *match)
 {
+	const struct xt_tarhash_mtinfo *info = (const void *)match->data;
+	printf(" --key %.32s --ratio %u --src-prefix4 %u --src-prefix6 %u",
+			info->key,
+			info->ratio,
+			info->src_prefix4,
+			info->src_prefix6);
 	//TODO: What is this function for? Can it be deleted?
 }
 
 static void tarhash_mt_print(const void *ip,
-    const struct xt_entry_target *target, int numeric)
+    const struct xt_entry_match *match, int numeric)
 {
 	printf(" tarhash ");
-	tarhash_mt_save(ip, target);
+	tarhash_mt_save(ip, match);
 }
 
 static struct xtables_match tarhash_mt_reg = {
