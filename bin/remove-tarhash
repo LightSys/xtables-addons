@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
-rules=$(sudo iptables --list-rules INPUT | grep -n tarhash | cut -d: -f1)
-for ruleno in $rules; do
-	sudo iptables --delete INPUT $(( ruleno - 1 ))
+while true; do
+	rule_indices=$(sudo iptables --list-rules INPUT | grep -n tarhash | cut -d: -f1)
+	rule_index=
+	for i in $rule_indices; do
+		rule_index=$i
+		break
+	done
+	if [ -z "$rule_index" ]; then
+		break
+	else
+		echo removing rule $rule_index
+		sudo iptables --delete INPUT $(( rule_index - 1 ))
+	fi
+		
 done
 sudo rmmod xt_tarhash
-
