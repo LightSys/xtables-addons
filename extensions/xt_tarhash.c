@@ -60,12 +60,14 @@
 #define IP6HSIZE            69
 #define MAX_HASHLEN         128
 #define MAX_HASH_STRING_LEN 256
+#define DEBUG               1     /* 1 for debug kernel logging, 0 for none */
 
 struct xt_tarhash_sdesc {
 	struct shash_desc shash;
 	char ctx[];
 };
 
+# ifdef DEBUG
 static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash) {
 	size_t i;
 	char hex_string_hash[MAX_HASH_STRING_LEN];
@@ -83,6 +85,7 @@ static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash) {
 	}
 	printk(KERN_DEBUG "hash: %s\n", hex_string_hash);
 }
+#endif
 
 static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) 
 {
@@ -96,7 +99,11 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 		printk(KERN_ERR "failed to create hash digest\n");
 		return false;
 	}
+	
+#ifdef DEBUG	
 	printkhash(KERN_DEBUG info, hash);
+#endif
+
 	i = 0;
 	result = 0;
 	digest_length = info->digest_length;
@@ -112,21 +119,22 @@ static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr 
 	uint32_t indexed_source_ip;
 	char string_to_hash[IP4HSIZE];
 
-	/* For checking whether we can access all needed properties */
-	/*printk(KERN_DEBUG "dest port: %u\n", be16_to_cpu(oth->dest));
-	printk(KERN_DEBUG "source ip: %u\n", be32_to_cpu(iph->saddr));
-	printk(KERN_DEBUG "dest ip: %u\n", be32_to_cpu(iph->daddr));
-	printk(KERN_DEBUG "ratio: %u\n", info->ratio);
-	printk(KERN_DEBUG "key: %s\n", info->key);*/
 
         indexed_source_ip = be32_to_cpu(iph->saddr) & info->mask4;
         string_to_hash[21];
 
-	// printk(KERN_DEBUG "source ip: %u\n", be32_to_cpu(iph->saddr));
-	// printk(KERN_DEBUG "     mask: %u\n", info->mask4);	
-	// printk(KERN_DEBUG "masked ip: %u\n", indexed_source_ip);
+#ifdef DEBUG
+	/* For checking whether we can access all needed properties */
+	printk(KERN_DEBUG "dest port: %u\n", be16_to_cpu(oth->dest));
+	printk(KERN_DEBUG "source ip: %u\n", be32_to_cpu(iph->saddr));
+	printk(KERN_DEBUG "  dest ip: %u\n", be32_to_cpu(iph->daddr));
+	printk(KERN_DEBUG "    ratio: %u\n", info->ratio);
+	printk(KERN_DEBUG "      key: %s\n", info->key);
+	printk(KERN_DEBUG "     mask: %u\n", info->mask4);	
+	printk(KERN_DEBUG "masked ip: %u\n", indexed_source_ip);
+#endif        
 
-        snprintf(string_to_hash, IP4HSIZE, "%08x%08x%04x", indexed_source_ip,
+	snprintf(string_to_hash, IP4HSIZE, "%08x%08x%04x", indexed_source_ip,
 		 be32_to_cpu(iph->daddr), be16_to_cpu(oth->dest));
 
 	return xttarhash_decision(info, string_to_hash, IP4HSIZE - 1);
