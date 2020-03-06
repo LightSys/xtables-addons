@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-sudo iptables -A INPUT -p tcp -m tcp --dport 80 \
-	-m TARHASH \
+sudo iptables -A INPUT -p tcp -m tcp --dport 1000:1999 \
+	-m tarhash \
 	--key jebjebjebjebjebjebjebjebjebjebje \
-	--ratio 100 \
-	--src-prefix4 32 \
-	--src-prefix6 128 \
+	--ratio 20 \
+	--src-prefix4 30 \
+	--src-prefix6 64 \
 	-j TARPIT --tarpit
 

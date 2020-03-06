@@ -38,16 +38,11 @@
  * - Reply to TCP !SYN,!RST,!FIN with ACK, window 0 bytes, rate-limited
  */
 
-//TODO Rename files to lowercase because this is a match instead of a target.
 #include <linux/ip.h>
 #include <linux/module.h>
 #include <linux/skbuff.h>
-#include <linux/version.h>
 #include <linux/netfilter_ipv6.h>
 #include <linux/netfilter/x_tables.h>
-#ifdef CONFIG_BRIDGE_NETFILTER
-#	include <linux/netfilter_bridge.h>
-#endif
 #include <net/addrconf.h>
 #include <net/ip6_checksum.h>
 #include <net/ip6_route.h>
@@ -56,89 +51,118 @@
 #include <net/tcp.h>
 #include <crypto/hash.h>
 #include "compat_xtables.h"
-#include "xt_TARHASH.h"
+#include "xt_tarhash.h"
 #if defined(CONFIG_IP6_NF_IPTABLES) || defined(CONFIG_IP6_NF_IPTABLES_MODULE)
 #	define WITH_IPV6 1
 #endif
+
+#define IP4HSIZE            21
+#define IP6HSIZE            69
+#define MAX_HASHLEN         128
+#define MAX_HASH_STRING_LEN 256
 
 struct xt_tarhash_sdesc {
 	struct shash_desc shash;
 	char ctx[];
 };
 
-static void printkhash(char *hash) {
-	size_t i = 0;
+static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash) {
+	size_t i;
+	char hex_string_hash[MAX_HASH_STRING_LEN];
+	unsigned int digest_length;
 	const char *hex = "0123456789abcdef";
-	char hex_string_hash[65];
-	hex_string_hash[64] = 0;
-	while (i < 32) {
+
+	i = 0;
+	hex_string_hash[MAX_HASHLEN * 2] = 0;
+	digest_length = info->digest_length;
+	hex_string_hash[digest_length * 2] = '\0';
+	while (i < digest_length) {
 		hex_string_hash[i * 2] = (hex[(hash[i] >> 4) & 0xF]);
 		hex_string_hash[i * 2 + 1] = (hex[hash[i] & 0xF]);
 		i++;
 	}
-	printk("hash: %s\n", hex_string_hash);
+	printk(KERN_DEBUG "hash: %s\n", hex_string_hash);
 }
 
-static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) {
-	unsigned char hash[32];
+static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) 
+{
+	unsigned char hash[MAX_HASHLEN];
+	unsigned size_t i;
+	unsigned int result;
+	unsigned int digest_length;
+
 	int hash_result = crypto_shash_digest(&info->desc->shash, data, datalen, hash);
 	if (hash_result != 0) {
-		printk("failed to create hash digest\n");
+		printk(KERN_ERR "failed to create hash digest\n");
+		return false;
 	}
-	printkhash(hash);
-	unsigned char i = 0;
-	unsigned int result = 0;
-	while (i < 32) {
+	printkhash(KERN_DEBUG info, hash);
+	i = 0;
+	result = 0;
+	digest_length = info->digest_length;
+	while (i < digest_length) {
 		result = (result * 256 + hash[i]) % info->ratio;
 		i++;
 	}
 	return result == 0;
 }
 
-static bool xttarhash_hashdecided(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
+static bool xttarhash_hashdecided4(const struct tcphdr *oth, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
 {
-	// Make hash of (masked) source, dest, port, key
-	// Modulus by ratio
-	// If mod is 0, return true
-	// If mod is non-zero return false
+	uint32_t indexed_source_ip;
+	char string_to_hash[IP4HSIZE];
 
 	/* For checking whether we can access all needed properties */
+	/*printk(KERN_DEBUG "dest port: %u\n", be16_to_cpu(oth->dest));
+	printk(KERN_DEBUG "source ip: %u\n", be32_to_cpu(iph->saddr));
+	printk(KERN_DEBUG "dest ip: %u\n", be32_to_cpu(iph->daddr));
+	printk(KERN_DEBUG "ratio: %u\n", info->ratio);
+	printk(KERN_DEBUG "key: %s\n", info->key);*/
 
-	printk("dest: %u\n", oth->dest);
-	printk("saddr: %u\n", iph->saddr);
-	printk("daddr: %u\n", iph->daddr);
-	printk("ratio: %u\n", info->ratio);
-	printk("key: %s\n", info->key);
+        indexed_source_ip = be32_to_cpu(iph->saddr) & info->mask4;
+        string_to_hash[21];
 
-        char string_to_hash[21];
-        uint32_t indexed_source_ip = iph->saddr && info->mask4;
+	// printk(KERN_DEBUG "source ip: %u\n", be32_to_cpu(iph->saddr));
+	// printk(KERN_DEBUG "     mask: %u\n", info->mask4);	
+	// printk(KERN_DEBUG "masked ip: %u\n", indexed_source_ip);
 
-        snprintf(string_to_hash, 21, "%08x %08x %04x", indexed_source_ip,
-		 iph->daddr, oth->dest);
+        snprintf(string_to_hash, IP4HSIZE, "%08x%08x%04x", indexed_source_ip,
+		 be32_to_cpu(iph->daddr), be16_to_cpu(oth->dest));
 
-	return xttarhash_decision(info, string_to_hash, strlen(string_to_hash));
+	return xttarhash_decision(info, string_to_hash, IP4HSIZE - 1);
 }
 
+#ifdef WITH_IPV6
 static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hdr *iph, const struct xt_tarhash_mtinfo *info) 
 {
-        char string_to_hash[69];
+        char string_to_hash[IP6HSIZE];
 	
 	const __u8 *sa = iph->saddr.s6_addr;
 	const __u8 *da = iph->daddr.in6_u.u6_addr8;
+	char saddr[16];
+	size_t i;
+	const uint8_t *ma;
 
-	const uint8_t *ma = info->mask6;
+	ma = info->mask6;
 
-	snprintf(string_to_hash, 69, "%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %04x",
-		 sa[0] && ma[0], sa[1] && ma[1], sa[2] && ma[2], sa[3] && ma[3],
-		 sa[4] && ma[4], sa[5] && ma[5], sa[6] && ma[6], sa[7] && ma[7],
-		 sa[8] && ma[8], sa[9] && ma[9], sa[10] && ma[10],
-		 sa[11] && ma[11], sa[12] && ma[12], sa[13] && ma[13],
-		 sa[14] && ma[14], sa[15] && ma[15], da[0], da[1], da[2], da[3],
-		 da[4], da[5], da[6], da[7], da[8], da[9], da[10], da[11], da[12],
+	i = 0;
+	while (i < 16) {
+		saddr[i] = sa[i] && ma[i];
+		i++;
+	}
+
+	snprintf(string_to_hash, IP6HSIZE, "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%04x",
+		 saddr[0],  saddr[1],  saddr[2],  saddr[3],
+		 saddr[4],  saddr[5],  saddr[6],  saddr[7],
+		 saddr[8],  saddr[9],  saddr[10], saddr[11],
+		 saddr[12], saddr[13], saddr[14], saddr[15], 
+		 da[0],  da[1],  da[2],  da[3],  da[4],  da[5], da[6], 
+		 da[7],  da[8],  da[9],  da[10], da[11], da[12],
 		 da[13], da[14], da[15], oth->dest);
 
-	return xttarhash_decision(info, string_to_hash, strlen(string_to_hash));
+	return xttarhash_decision(info, string_to_hash, IP6HSIZE - 1);
 }
+#endif
 
 static bool tarhash_tcp4(struct net *net, const struct sk_buff *oldskb,
     unsigned int hook, const struct iphdr *iph, const struct xt_tarhash_mtinfo *info)
@@ -156,7 +180,7 @@ static bool tarhash_tcp4(struct net *net, const struct sk_buff *oldskb,
 		return false;
 
 	/* Check using hash function whether tarpit response should be sent */
-	return xttarhash_hashdecided(oth, iph, info);
+	return xttarhash_hashdecided4(oth, iph, info);
 }
 
 #ifdef WITH_IPV6
@@ -208,8 +232,8 @@ static bool tarhash_tcp6(struct net *net, const struct sk_buff *oldskb,
 
 static bool tarhash_mt4(const struct sk_buff *skb, struct xt_action_param *par)
 {
-	const struct iphdr *iph = ip_hdr(skb);
 	const struct rtable *rt = skb_rtable(skb);
+	const struct iphdr *iph = ip_hdr(skb);
 	const struct xt_tarhash_mtinfo *info = par->targinfo;
 
 	/* Do we have an input route cache entry? (Not in PREROUTING.) */
@@ -279,16 +303,26 @@ static bool tarhash_mt6(const struct sk_buff *skb, struct xt_action_param *par)
 #endif
 
 static int tarhash_mt_check(const struct xt_mtchk_param *par) {
-	struct xt_tarhash_mtinfo *info = par->matchinfo;
+	struct xt_tarhash_mtinfo *info;
+	unsigned int desc_size;
+	unsigned int alloc_size;
+
+	info = par->matchinfo;
 	// TODO: allocate the algorithm once for the whole module and set the key per packet?
-	info->hash_algorithm = crypto_alloc_shash("hmac(sha256)", CRYPTO_ALG_TYPE_SHASH, 0);
-	crypto_shash_setkey(info->hash_algorithm, info->key, 32);
-	unsigned int desc_size = crypto_shash_descsize(info->hash_algorithm);
-	unsigned int alloc_size = sizeof(struct shash_desc) + desc_size;
+	// TODO check that the crypto algorithm is actually available. Options
+	// include having several default algorithms that we check in
+	// succession, or just letting the user specify the hash algorithm and
+	// return an error if that algorithm is not available.
+	info->hash_algorithm = crypto_alloc_shash("md5", CRYPTO_ALG_TYPE_SHASH, 0); 
+	// TODO ensure that the digest length is less than MAX_HASHLEN
+	info->digest_length = crypto_shash_digestsize(info->hash_algorithm);
+	crypto_shash_setkey(info->hash_algorithm, info->key, info->digest_length);
+	desc_size = crypto_shash_descsize(info->hash_algorithm);
+	alloc_size = sizeof(struct shash_desc) + desc_size;
 	info->desc = kmalloc(alloc_size, GFP_KERNEL);
 	if (!info->desc) {
-		printk("allocation failed\n");
-		// TODO: error out in this case.
+		printk(KERN_ERR "allocation failed\n");
+		return -EINVAL;	
 	}
 	info->desc->shash.tfm = info->hash_algorithm;
 	info->desc->shash.flags = 0x0;
@@ -303,22 +337,22 @@ static void tarhash_mt_destroy(const struct xt_mtdtor_param *par) {
 
 static struct xt_match tarhash_mt_reg[] __read_mostly = {
 	{
-		.name       = "TARHASH",
+		.name       = "tarhash",
 		.revision   = 0,
 		.family     = NFPROTO_IPV4,
 		.match      = tarhash_mt4,
-		.matchsize = sizeof(struct xt_tarhash_mtinfo),
+		.matchsize  = sizeof(struct xt_tarhash_mtinfo),
 		.checkentry = tarhash_mt_check,
 		.destroy    = tarhash_mt_destroy,
 		.me         = THIS_MODULE,
 	},
 #ifdef WITH_IPV6
 	{
-		.name       = "TARHASH",
+		.name       = "tarhash",
 		.revision   = 0,
 		.family     = NFPROTO_IPV6,
 		.match      = tarhash_mt6,
-		.matchsize = sizeof(struct xt_tarhash_mtinfo),
+		.matchsize  = sizeof(struct xt_tarhash_mtinfo),
 		.checkentry = tarhash_mt_check,
 		.destroy    = tarhash_mt_destroy,
 		.me         = THIS_MODULE,
@@ -339,8 +373,8 @@ static void __exit tarhash_mt_exit(void)
 
 module_init(tarhash_mt_init);
 module_exit(tarhash_mt_exit);
-MODULE_DESCRIPTION("Xtables: \"TARHASH\", capture and hold TCP connections");
+MODULE_DESCRIPTION("Xtables: \"tarhash\", capture and hold TCP connections");
 MODULE_AUTHOR("Jan Engelhardt ");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("ipt_TARHASH");
-MODULE_ALIAS("ip6t_TARHASH");
+MODULE_ALIAS("ipt_tarhash");
+MODULE_ALIAS("ip6t_tarhash");

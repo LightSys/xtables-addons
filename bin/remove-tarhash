@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-rules=$(sudo iptables --list-rules INPUT | grep -n TARHASH | cut -d: -f1)
+rules=$(sudo iptables --list-rules INPUT | grep -n tarhash | cut -d: -f1)
 for ruleno in $rules; do
 	sudo iptables --delete INPUT $(( ruleno - 1 ))
 done
-sudo rmmod xt_TARHASH
+sudo rmmod xt_tarhash
 
