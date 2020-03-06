@@ -313,7 +313,7 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par) {
 	// include having several default algorithms that we check in
 	// succession, or just letting the user specify the hash algorithm and
 	// return an error if that algorithm is not available.
-	info->hash_algorithm = crypto_alloc_shash("md5", CRYPTO_ALG_TYPE_SHASH, 0); 
+	info->hash_algorithm = crypto_alloc_shash("hmac(sha256-avx2)", CRYPTO_ALG_TYPE_SHASH, 0); 
 	// TODO ensure that the digest length is less than MAX_HASHLEN
 	info->digest_length = crypto_shash_digestsize(info->hash_algorithm);
 	crypto_shash_setkey(info->hash_algorithm, info->key, info->digest_length);
