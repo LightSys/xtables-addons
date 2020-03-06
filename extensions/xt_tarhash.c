@@ -56,12 +56,12 @@
 #	define WITH_IPV6 1
 #endif
 
-#define IP4HSIZE            21
-#define IP6HSIZE            69
-#define MAX_HASHLEN         128
-#define MAX_HASH_STRING_LEN 256
-#define DEBUG               1     /* 1 for debug kernel logging, 0 for none
-				     debug elements should probably be removed in final product */
+#define IP4HSIZE                  21
+#define IP6HSIZE                  69
+#define MAX_HASHLEN               128
+#define MAX_PRINTK_HEX_STRING_LEN 257
+#define DEBUG                     1     /* 1 for debug kernel logging, 0 for none
+				           debug elements should probably be removed in final product */
 
 struct xt_tarhash_sdesc
 {
@@ -70,30 +70,39 @@ struct xt_tarhash_sdesc
 };
 
 # ifdef DEBUG
-static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash)
+static void printk_hex_string(const char *buf, const size_t buflen)
 {
 	size_t i;
-	char hex_string_hash[MAX_HASH_STRING_LEN];
-	unsigned int digest_length;
-	const char *hex = "0123456789abcdef";
+	const char *hex;
+	char output[MAX_PRINTK_HEX_STRING_LEN];
 
+	if (buflen > MAX_PRINTK_HEX_STRING_LEN) {
+		printk("Too long of a string to print\n");
+		return;
+	}
+	hex = "0123456789abcdef";
+	output[buflen * 2] = 0;
 	i = 0;
-	hex_string_hash[MAX_HASHLEN * 2] = 0;
-	digest_length = info->digest_length;
-	hex_string_hash[digest_length * 2] = '\0';
-	while (i < digest_length) {
-		hex_string_hash[i * 2] = (hex[(hash[i] >> 4) & 0xF]);
-		hex_string_hash[i * 2 + 1] = (hex[hash[i] & 0xF]);
+	while (i < buflen) {
+		output[i * 2] = (hex[(buf[i] >> 4) & 0xF]);
+		output[i * 2 + 1] = (hex[buf[i] & 0xF]);
 		i++;
 	}
-	printk(KERN_DEBUG "hash: %s\n", hex_string_hash);
+	printk(KERN_DEBUG "%s\n", output);
+}
+
+static void printkhash(const struct xt_tarhash_mtinfo *info, char *hash)
+{
+	unsigned int digest_length;
+	digest_length = info->digest_length;
+	printk_hex_string(hash, digest_length);
 }
 #endif
 
 static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char *data, unsigned char datalen) 
 {
 	unsigned char hash[MAX_HASHLEN];
-	unsigned size_t i;
+	size_t i;
 	unsigned int result;
 	unsigned int digest_length;
 
@@ -103,9 +112,9 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 		printk(KERN_ERR "failed to create hash digest\n");
 		return false;
 	}
-	
+
 #ifdef DEBUG	
-	printkhash(KERN_DEBUG info, hash);
+	printkhash(info, hash);
 #endif
 	
 	/* mod the hash by ratio to determine match */
@@ -168,7 +177,13 @@ static bool xttarhash_hashdecided6(const struct tcphdr *oth, const struct ipv6hd
 		 saddr[12], saddr[13], saddr[14], saddr[15], 
 		 da[0],  da[1],  da[2],  da[3],  da[4],  da[5], da[6], 
 		 da[7],  da[8],  da[9],  da[10], da[11], da[12],
-		 da[13], da[14], da[15], oth->dest);
+		 da[13], da[14], da[15], be16_to_cpu(oth->dest));
+	
+
+#ifdef DEBUG
+	printk(KERN_INFO "ipv6 string to hash: %s\n", string_to_hash);
+	printk_hex_string(ma, 16);
+#endif
 
 	return xttarhash_decision(info, string_to_hash, IP6HSIZE - 1);
 }
@@ -228,14 +243,7 @@ static bool tarhash_tcp6(struct net *net, const struct sk_buff *oldskb,
 		return false;
 	}
 
-	/* Check checksum. */
-	if (csum_ipv6_magic(&oip6h->saddr, &oip6h->daddr, otcplen, IPPROTO_TCP,
-	    skb_checksum(oldskb, tcphoff, otcplen, 0))) {
-		pr_debug("TCP checksum is invalid\n");
-		return false;
-	}
-
-	/* Check using hash function whether packet should continue */
+	/* Check using hash function whether tarpit response should be sent */
 	return xttarhash_hashdecided6(&oth, iph, info);
 }
 #endif
@@ -326,7 +334,7 @@ static int tarhash_mt_check(const struct xt_mtchk_param *par)
 	// include having several default algorithms that we check in
 	// succession, or just letting the user specify the hash algorithm and
 	// return an error if that algorithm is not available.
-	info->hash_algorithm = crypto_alloc_shash("hmac(sha256-avx2)", CRYPTO_ALG_TYPE_SHASH, 0); 
+	info->hash_algorithm = crypto_alloc_shash("hmac(sha1-avx2)", CRYPTO_ALG_TYPE_SHASH, 0); 
 	// TODO ensure that the digest length is less than MAX_HASHLEN
 	info->digest_length = crypto_shash_digestsize(info->hash_algorithm);
 	crypto_shash_setkey(info->hash_algorithm, info->key, info->digest_length);

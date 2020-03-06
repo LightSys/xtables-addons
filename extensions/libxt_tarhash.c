@@ -102,6 +102,7 @@ static int tarhash_mt_parse(int c, char **argv, int invert, unsigned int *flags,
 			xtables_param_act(XTF_BAD_VALUE, "tarhash", "--src-prefix4", optarg);
 			return false;
 		}
+		info->src_prefix4 = parsed_src_prefix4;
 		info->mask4 = (0x1 << 31) >> ((uint8_t)parsed_src_prefix4 - 1);
 		return true;
 	case '6':
@@ -114,16 +115,14 @@ static int tarhash_mt_parse(int c, char **argv, int invert, unsigned int *flags,
 			return false;
 		}
 		info->src_prefix6 = parsed_src_prefix6;
-		bool zero_rest = false;
-		for (int i = 1; i <= 16; i++) {
-			if (zero_rest) info->mask6[i-1] = 0;
-			else if (parsed_src_prefix6 > (8 * i)) {
-				info->mask6[i - 1] = UINT8_MAX;
-			}
-			else {
-				info->mask6[i - 1] = (0x1<<7)>>(parsed_src_prefix6 - (8 * (16 - i)));
-				zero_rest = true;
-			}
+		for (int i = 0; i < 16; i++) {
+			if (i < parsed_src_prefix6 / 8) {
+				info->mask6[i] = UINT8_MAX;
+			} else if (i == parsed_src_prefix6 / 8 && parsed_src_prefix6 % 8 == 0) {
+				info->mask6[i] = ((char)(0x1 << 7) >> ((parsed_src_prefix6 % 8) - 1));
+			} else {
+				info->mask6[i] = 0;
+			}	
 		}
 		return true;
 	}
