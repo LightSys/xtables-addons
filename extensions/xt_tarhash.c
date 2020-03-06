@@ -87,6 +87,7 @@ static bool xttarhash_decision(const struct xt_tarhash_mtinfo* info, const char 
 	int hash_result = crypto_shash_digest(&info->desc->shash, data, datalen, hash);
 	if (hash_result != 0) {
 		printk("failed to create hash digest\n");
+		return false;
 	}
 	printkhash(hash);
 	i = 0;
@@ -312,7 +313,7 @@ static struct xt_match tarhash_mt_reg[] __read_mostly = {
 		.revision   = 0,
 		.family     = NFPROTO_IPV4,
 		.match      = tarhash_mt4,
-		.matchsize = sizeof(struct xt_tarhash_mtinfo),
+		.matchsize  = sizeof(struct xt_tarhash_mtinfo),
 		.checkentry = tarhash_mt_check,
 		.destroy    = tarhash_mt_destroy,
 		.me         = THIS_MODULE,
@@ -323,7 +324,7 @@ static struct xt_match tarhash_mt_reg[] __read_mostly = {
 		.revision   = 0,
 		.family     = NFPROTO_IPV6,
 		.match      = tarhash_mt6,
-		.matchsize = sizeof(struct xt_tarhash_mtinfo),
+		.matchsize  = sizeof(struct xt_tarhash_mtinfo),
 		.checkentry = tarhash_mt_check,
 		.destroy    = tarhash_mt_destroy,
 		.me         = THIS_MODULE,
