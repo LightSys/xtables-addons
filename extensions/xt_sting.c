@@ -4,7 +4,10 @@
  *	a fingerprint.
  *
  *	Copyright © Aaron Hopkins <tools [at] die net>, 2002
- *      Copyright © Jeb Bishop, Philip White, Cullen Nash, and Micah Switzer, 2020
+ *
+ *	Modifications by:
+ *      Copyright © LightSys, Jeb Bishop, Philip White, 
+ *      Cullen Nash, and Micah Switzer, 2020
  *
  *      Developed using xt_TARPIT and xt_pknock as a guide.
  *
