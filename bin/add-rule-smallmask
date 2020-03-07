@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+sudo ip6tables -A INPUT -p tcp -m tcp ! --dport 22 \
+	-m sting \
+	--key jebjebjebjebjebjebjebjebjebjebjd \
+	--ratio 20 \
+	--src-prefix4 17 \
+	--src-prefix6 64 \
+	-j TARPIT --tarpit
+
+sudo iptables -A INPUT -p tcp -m tcp ! --dport 22 \
+	-m sting \
+	--key jebjebjebjebjebjebjebjebjebjebjc \
+	--ratio 20 \
+	--src-prefix4 17 \
+	--src-prefix6 64 \
+	-j TARPIT --tarpit
+
