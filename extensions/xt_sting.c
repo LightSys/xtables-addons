@@ -1,12 +1,12 @@
 /*
- *	"TARPIT" target extension to Xtables
- *	Kernel module to capture and hold incoming TCP connections using
- *	no local per-connection resources.
+ *	"sting" matching extension to Xtables
+ *	Deterministically capture incoming TCP connections and store
+ *	a fingerprint.
  *
  *	Copyright © Aaron Hopkins <tools [at] die net>, 2002
+ *      Copyright © Jeb Bishop, Philip White, Cullen Nash, and Micah Switzer, 2020
  *
- *	Based on ipt_REJECT.c and offering functionality similar to
- *	LaBrea <http://www.hackbusters.net/LaBrea/>.
+ *      Developed using xt_TARPIT and xt_pknock as a guide.
  *
  *	<<<
  *	This program is free software; you can redistribute it and/or modify
@@ -25,17 +25,9 @@
  *	>>>
  *
  * Goal:
- * - Allow incoming TCP connections to be established.
- * - Passing data should result in the connection being switched to the
- *   persist state (0 byte window), in which the remote side stops sending
- *   data and asks to continue every 60 seconds.
- * - Attempts to shut down the connection should be ignored completely, so
- *   the remote side ends up having to time it out.
- *
- * This means:
- * - Reply to TCP SYN,!ACK,!RST,!FIN with SYN-ACK, window 5 bytes
- * - Reply to TCP SYN,ACK,!RST,!FIN with RST to prevent spoofing
- * - Reply to TCP !SYN,!RST,!FIN with ACK, window 0 bytes, rate-limited
+ * - Create deterministic hash based on incoming packets and key
+ * - Based on the modulus of the hash and a ratio, drop packets or release
+ *   packets to the following parts of the chain.
  */
 
 #include <linux/ip.h>
